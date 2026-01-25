@@ -1,0 +1,65 @@
+﻿[dotenv@17.2.3] injecting env (5) from .env -- tip: ЁЯФД add secrets lifecycle management: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (1) from .env.local -- tip: ЁЯЫая╕П  run anywhere with `dotenvx run -- yourcommand`
+
+ЁЯЪА External PDF Parser with GPT
+================================
+
+ЁЯУЛ Norm ID: c3cf3466-0081-4ca1-a3b1-cc75ea70769b
+
+ЁЯУЦ Step 1: Fetching norm details...
+   тЬЕ Found: ╨б╨Э ╨а╨Ъ 2.02-01-2023 - ╨Я╨Ю╨Ц╨Р╨а╨Э╨Р╨п ╨С╨Х╨Ч╨Ю╨Я╨Р╨б╨Э╨Ю╨б╨в╨м ╨Ч╨Ф╨Р╨Э╨Ш╨Щ ╨Ш ╨б╨Ю╨Ю╨а╨г╨Ц╨Х╨Э╨Ш╨Щ
+
+ЁЯУБ Step 2: Fetching PDF files...
+   тЬЕ Found 1 valid file(s)
+
+ЁЯУД Step 3: Extracting text from PDF...
+   ЁЯУЦ Reading: SN-RK-2.02_01_2023.pdf
+   ЁЯУК Size: 1366.91 KB
+[PdfHelper] Attempting V1 (pdf-parse)...
+[PdfHelper] Processing buffer of size: 1399717
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+[PdfHelper] Text extracted. Length: 153126
+   тЬЕ Extracted 153126 characters
+
+ЁЯдЦ Step 4: Sending to GPT-4o-mini for parsing...
+   ЁЯУЭ Sending 153126 characters to AI
+
+   тЬЕ Received response from GPT
+
+ЁЯФН Step 5: Parsing AI response...
+   тЬЕ Extracted 8 requirements
+
+ЁЯТ╛ Step 6: Saving to database...
+   ЁЯФН Finding requirement set...
+   тЬЕ Using requirement set: RS-APS-KZ-1.0
+node :    тЭМ Error inserting requirements: {
+строка:1 знак:1
++ node scripts/parse-pdf-with-gpt.js c3cf3466-0081-4ca
+1-a3b1-cc75ea7076 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   тЭМ E 
+   rror inserting requirements: {:String) [], Remote  
+  Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  code: '23502',
+  details: 'Failing row contains (null, REQ-------2-02
+-01-2023-0001, fb6192a9-c88a-4d09-93b1-9e6ddf9dfec5, G
+ENERAL, c3cf3466-0081-4ca1-a3b1-cc75ea70769b, 4.1, ╨а╨
+░╨╖╨┤╨╡╨╗ ╨┐╤А╨╛╨╡╨║╤В╨╜╨╛-╤Б╨╝╨╡╤В╨╜╨╛╨╣ ╨┤╨╛╨║╤Г╨╝╨╡
+╨╜╤В╨░..., ╨а╨░╨╖╨┤╨╡╨╗ ╨┐╤А╨╛╨╡╨║╤В╨╜╨╛-╤Б╨╝╨╡╤В╨╜╨╛╨
+╣ ╨┤╨╛╨║╤Г╨╝╨╡╨╜╤В╨░..., document, {photo}, t, {"╨┐╤А╨
+╛╨╡╨║╤В╨╜╨╛-╤Б╨╝╨╡╤В╨╜╨░╤П ╨┤╨╛╨║╤Г╨╝╨╡╨╜╤В╨░╤Ж╨╕╤П","
+╨┐..., null, null, 2026-01-25 00:21:07.63, external-pa
+rser, null).',
+  hint: null,
+  message: 'null value in column "id" of relation "req
+uirements" violates not-null constraint'
+}
+
+тЭМ ERROR: null value in column "id" of relation "requ
+irements" violates not-null constraint
+
+Stack: undefined

@@ -1,0 +1,770 @@
+// This is your Prisma schema file for Digital Audit System
+// Based on Technical Specification v1.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// REFERENCE DATA (Справочники)
+// ============================================================================
+
+model System {
+  id          String   @id @default(cuid())
+  systemId    String   @unique // APS, SOUE, CCTV, ACS, OS, SCS
+  name        String
+  nameRu      String?
+  nameKz      String?
+  scopeDefault Boolean @default(true)
+  defectPrefix String  // APS-D
+  protocolPrefix String // TP-APS
+  photoPrefix String   // PHT
+  status      String   @default("ACTIVE") // ACTIVE, DEPRECATED
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requirements      Requirement[]
+  requirementSets   RequirementSet[]
+  defects           Defect[]
+  checkItems        CheckItem[]
+  protocols         Protocol[]
+  
+  @@map("systems")
+}
+
+model DefectType {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  nameRu      String?
+  defaultActionGroup String?
+  romWorkType String?
+  createdAt   DateTime @default(now())
+  
+  defects     Defect[]
+  
+  @@map("defect_types")
+}
+
+model SeverityLevel {
+  id                  String   @id @default(cuid())
+  level               String   @unique // CRITICAL, HIGH, MEDIUM, LOW
+  impactMin           Int
+  impactMax           Int
+  likelihoodMin       Int
+  likelihoodMax       Int
+  defaultDueDays      Int
+  requiresRisk        Boolean  @default(false)
+  requiresClosure     Boolean  @default(false)
+  color               String?
+  order               Int      @default(0)
+  
+  defects             Defect[]
+  
+  @@map("severity_levels")
+}
+
+model NAReason {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  text            String
+  textRu          String?
+  needsComment    Boolean  @default(false)
+  order           Int      @default(0)
+  
+  checkItems      CheckItem[]
+  
+  @@map("na_reasons")
+}
+
+model EvidenceType {
+  id              String   @id @default(cuid())
+  code            String   @unique // photo, protocol, measurement, log, document, video
+  name            String
+  isMandatoryOnFail Boolean @default(false)
+  allowedFormats  String[] // ["jpg", "png", "pdf"]
+  
+  @@map("evidence_types")
+}
+
+model CustomerDocType {
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  name                String
+  nameRu              String?
+  required            Boolean  @default(false)
+  appliesToSystems    String[] // system IDs
+  acceptsSubstitutes  Boolean  @default(false)
+  notes               String?
+  order               Int      @default(0)
+  
+  documentRequests    DocumentRequest[]
+  
+  @@map("customer_doc_types")
+}
+
+// ============================================================================
+// NORM LIBRARY (Нормативная библиотека)
+// ============================================================================
+
+model NormSource {
+  id              String   @id @default(cuid())
+  normSourceId    String   @unique // NS-KZ-000123
+  jurisdiction    String   // KZ, RU, INT
+  docType         String   // СН, СП, ГОСТ, СТ РК, Техрегламент
+  code            String   // "СН РК ..."
+  title           String
+  editionDate     DateTime?
+  publisher       String?
+  status          String   @default("DRAFT") // DRAFT, ACTIVE, SUPERSEDED, ARCHIVED
+  keywords        String[]
+  tags            String[]
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+
+  files           NormFile[]
+  requirements    Requirement[]
+  auditSnapshots  AuditNormSnapshot[]
+  
+  @@unique([code, editionDate])
+  @@map("norm_sources")
+}
+
+model NormFile {
+  id              String   @id @default(cuid())
+  normSourceId    String
+  fileName        String
+  fileType        String   // pdf, docx, zip
+  fileSize        Int
+  fileHash        String   // SHA-256
+  storageUrl      String   // URL or path
+  accessLevel     String   @default("INTERNAL") // RESTRICTED, INTERNAL, PUBLIC
+  uploadedBy      String?
+  uploadedAt      DateTime @default(now())
+
+  normSource      NormSource @relation(fields: [normSourceId], references: [id], onDelete: Cascade)
+  
+  @@map("norm_files")
+}
+
+// ============================================================================
+// REQUIREMENT SETS (Каталог требований)
+// ============================================================================
+
+model RequirementSet {
+  id                  String   @id @default(cuid())
+  requirementSetId    String   @unique // RS-APS-KZ-1.0
+  systemId            String?
+  jurisdiction        String   // KZ, RU, INT
+  version             String
+  status              String   @default("DRAFT") // DRAFT, PUBLISHED, DEPRECATED, ARCHIVED
+  ownerId             String?
+  notes               String?
+  tags                String[]
+  createdAt           DateTime @default(now())
+  createdBy           String?
+  publishedAt         DateTime?
+  publishedBy         String?
+  updatedAt           DateTime @updatedAt
+
+  system              System?  @relation(fields: [systemId], references: [systemId])
+  requirements        Requirement[]
+  auditSnapshots      AuditRequirementSnapshot[]
+  checklists          AuditChecklist[]
+  
+  @@map("requirement_sets")
+}
+
+model Requirement {
+  id                      String   @id @default(cuid())
+  requirementId           String   @unique // REQ-APS-KZ-0042
+  requirementSetId        String
+  systemId                String
+  normSourceId            String
+  clause                  String   // пункт документа
+  requirementTextShort    String
+  requirementTextFull     String?
+  checkMethod             String   // visual, document, test, measurement, log
+  evidenceTypeExpected    String[] // ["photo", "protocol"]
+  mustCheck               Boolean  @default(false)
+  tags                    String[]
+  applicabilityRules      Json?    // Правила применимости
+  severityHint            String?
+  createdAt               DateTime @default(now())
+  createdBy               String?
+  updatedAt               DateTime @updatedAt
+
+  requirementSet          RequirementSet @relation(fields: [requirementSetId], references: [id], onDelete: Cascade)
+  system                  System   @relation(fields: [systemId], references: [systemId])
+  normSource              NormSource @relation(fields: [normSourceId], references: [id])
+  checkItems              CheckItem[]
+  defects                 Defect[]
+  auditResults            AuditResult[]
+  
+  @@map("requirements")
+}
+
+// ============================================================================
+// AUDIT (Аудит)
+// ============================================================================
+
+model Audit {
+  id                  String   @id @default(cuid())
+  auditId             String   @unique // AUTO-2024-001
+  objectName          String
+  objectAddress       String?
+  customerName        String?
+  customerContact     String?
+  objectType          String?  // БЦ, ЖК, производство
+  operationMode       String?  // 24/7, дневной
+  criticalZones       String[]
+  accessNotes         String?
+  
+  // Scope
+  systemsInScope      String[] // ["APS", "SOUE"]
+  scopeDepth          String   @default("STANDARD") // BASIC, STANDARD, DEEP
+  scopeExclusions     String?
+  
+  // Status & Timeline
+  status              String   @default("DRAFT") // DRAFT, PRE_AUDIT, FIELD, REVIEW, QC, COMPLETED
+  preAuditStatus      String   @default("NOT_STARTED")
+  fieldStatus         String   @default("NOT_STARTED")
+  reviewStatus        String   @default("NOT_STARTED")
+  qcStatus            String   @default("NOT_STARTED")
+  
+  preAuditStartedAt   DateTime?
+  preAuditCompletedAt DateTime?
+  fieldStartedAt      DateTime?
+  fieldCompletedAt    DateTime?
+  reviewStartedAt     DateTime?
+  reviewCompletedAt   DateTime?
+  qcRunAt             DateTime?
+  completedAt         DateTime?
+  
+  // Baseline Freeze
+  baselineFrozen      Boolean  @default(false)
+  baselineFrozenAt    DateTime?
+  baselineFrozenBy    String?
+  
+  // Methodology
+  methodology         String?
+  assumptions         String?
+  
+  // Verdict (from LA)
+  verdict             String?  // APPROVED, APPROVED_WITH_LIMITATIONS, NOT_APPROVED
+  verdictReason       String?
+  topRisks            Json?    // Array of top 5 risks
+  
+  // Report Settings
+  contractNumber      String?
+  auditorTitle        String?
+  companyLogoUrl      String?
+  facilityDescription String?
+  reportNotes         String?
+  
+  // Meta
+  createdAt           DateTime @default(now())
+  createdBy           String?
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
+
+  // Relations
+  baseline            AuditBaseline?
+  checkItems          CheckItem[]
+  defects             Defect[]
+  protocols           Protocol[]
+  evidence            Evidence[]
+  documentRequests    DocumentRequest[]
+  testPlans           TestPlan[]
+  capaActions         CapaAction[]
+  estimates           Estimate[]
+  packIssues          AuditPackIssue[]
+  
+  @@map("audits")
+}
+
+model AuditBaseline {
+  id                  String   @id @default(cuid())
+  auditId             String   @unique
+  snapshotId          String   @unique
+  status              String   @default("FROZEN")
+  createdAt           DateTime @default(now())
+  createdBy           String?
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  normSnapshots       AuditNormSnapshot[]
+  requirementSnapshots AuditRequirementSnapshot[]
+  
+  @@map("audit_baselines")
+}
+
+model AuditNormSnapshot {
+  id                  String   @id @default(cuid())
+  baselineId          String
+  normSourceId        String
+  editionDate         DateTime?
+  fileHash            String?
+  
+  baseline            AuditBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  normSource          NormSource @relation(fields: [normSourceId], references: [id])
+  
+  @@map("audit_norm_snapshots")
+}
+
+model AuditRequirementSnapshot {
+  id                  String   @id @default(cuid())
+  baselineId          String
+  requirementSetId    String
+  version             String
+  snapshotData        Json     // Полный снапшот требований
+  
+  baseline            AuditBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  requirementSet      RequirementSet @relation(fields: [requirementSetId], references: [id])
+  
+  @@map("audit_requirement_snapshots")
+}
+
+// ============================================================================
+// LOCATIONS (Локации)
+// ============================================================================
+
+model Location {
+  id              String   @id @default(cuid())
+  locationId      String   @unique
+  auditId         String?
+  
+  siteName        String?
+  buildingName    String
+  floorLabel      String
+  areaName        String?
+  roomLabel       String?
+  roomName        String?
+  pointName       String?
+  gps             String?
+  
+  locationFull    String   // Auto-generated
+  accessible      Boolean  @default(true)
+  roomType        String?  // щитовая, серверная, коридор
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  checkItems      CheckItem[]
+  defects         Defect[]
+  protocols       Protocol[]
+  evidence        Evidence[]
+  
+  @@map("locations")
+}
+
+// ============================================================================
+// FIELD AUDIT (Полевой аудит)
+// ============================================================================
+
+model CheckItem {
+  id                  String   @id @default(cuid())
+  checkItemId         String   @unique
+  auditId             String
+  requirementId       String
+  systemId            String
+  locationId          String?
+  
+  locationScope       String?  // "везде", "выборка", "щитовая"
+  samplingRule        String?
+  
+  status              String?  // PASS, FAIL, N_A
+  checkFact           String?
+  naReasonId          String?
+  naReasonComment     String?
+  
+  evidenceRefs        String[] // photo_ids, protocol_ids
+  
+  checkedBy           String?
+  checkedAt           DateTime?
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  requirement         Requirement @relation(fields: [requirementId], references: [id])
+  system              System   @relation(fields: [systemId], references: [systemId])
+  location            Location? @relation(fields: [locationId], references: [id])
+  naReason            NAReason? @relation(fields: [naReasonId], references: [id])
+  
+  @@map("check_items")
+}
+
+model Defect {
+  id                  String   @id @default(cuid())
+  defectId            String   @unique // APS-D-0001
+  auditId             String
+  systemId            String
+  defectTypeId        String?
+  requirementId       String?
+  locationId          String?
+  
+  defectStatus        String   @default("IN_REVIEW") // IN_REVIEW, APPROVED, REJECTED, CLOSED
+  
+  // Fact
+  defectFact          String
+  evidenceNotes       String?
+  
+  // Normative
+  noncomplianceStatement String?
+  
+  // Risk & Severity
+  impact              Int?     // 1-4
+  likelihood          Int?     // 1-4
+  severityLevelId     String?
+  riskConsequence     String?
+  priorityRank        Int?
+  
+  // Recommendations
+  recommendation      String?
+  correctiveActionGroup String?
+  closureCriteria     String?
+  
+  // Evidence links
+  photoIds            String[]
+  protocolIds         String[]
+  
+  // Responsibility
+  responsibleParty    String?  // CUSTOMER, CONTRACTOR, JOINT
+  targetDueDate       DateTime?
+  actionStatus        String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, VERIFIED
+  
+  // Audit trail
+  createdBy           String?
+  createdAt           DateTime @default(now())
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  updatedBy           String?
+  updatedAt           DateTime @updatedAt
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  system              System   @relation(fields: [systemId], references: [systemId])
+  defectType          DefectType? @relation(fields: [defectTypeId], references: [id])
+  requirement         Requirement? @relation(fields: [requirementId], references: [id])
+  location            Location? @relation(fields: [locationId], references: [id])
+  severityLevel       SeverityLevel? @relation(fields: [severityLevelId], references: [id])
+  capaActions         CapaAction[]
+  estimateLines       EstimateLine[]
+  
+  @@map("defects")
+}
+
+model Evidence {
+  id                  String   @id @default(cuid())
+  evidenceId          String   @unique // PHT-001, VID-001
+  auditId             String
+  evidenceType        String   // photo, video, log, measurement, document
+  
+  fileName            String?
+  fileSize            Int?
+  fileType            String?
+  storageUrl          String?
+  thumbnailUrl        String?
+  
+  locationId          String?
+  caption             String?
+  notes               String?
+  
+  linkedDefectIds     String[]
+  linkedProtocolIds   String[]
+  linkedCheckItemIds  String[]
+  
+  capturedBy          String?
+  capturedAt          DateTime?
+  uploadedAt          DateTime @default(now())
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  location            Location? @relation(fields: [locationId], references: [id])
+  
+  @@map("evidence")
+}
+
+model Protocol {
+  id                  String   @id @default(cuid())
+  protocolId          String   @unique // TP-APS-003
+  auditId             String
+  systemId            String
+  locationId          String?
+  
+  testType            String?
+  participants        String[] // ["FE: Иванов", "Customer: Петров"]
+  
+  methodology         String?
+  methodologySteps    Json?    // Array of steps
+  
+  equipmentTested     String?
+  expectedResult      String?
+  actualResult        String?
+  
+  verdict             String?  // PASS, FAIL, DRAFT
+  
+  linkedDefectIds     String[]
+  evidenceRefs        String[] // photo_ids
+  
+  conductedBy         String?
+  conductedAt         DateTime?
+  finalizedBy         String?
+  finalizedAt         DateTime?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  system              System   @relation(fields: [systemId], references: [systemId])
+  location            Location? @relation(fields: [locationId], references: [id])
+  
+  @@map("protocols")
+}
+
+// ============================================================================
+// PRE-AUDIT
+// ============================================================================
+
+model TestPlan {
+  id                  String   @id @default(cuid())
+  auditId             String
+  systemId            String
+  testType            String
+  zones               String[]
+  samplingMode        String   // 100%, SAMPLE
+  samplingRules       String?
+  participants        String[]
+  notes               String?
+  
+  createdAt           DateTime @default(now())
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  
+  @@map("test_plans")
+}
+
+model DocumentRequest {
+  id                  String   @id @default(cuid())
+  auditId             String
+  docTypeId           String
+  required            Boolean  @default(false)
+  dueDate             DateTime?
+  deliveryChannel     String?
+  substitutesAllowed  Boolean  @default(false)
+  notes               String?
+  
+  status              String   @default("REQUESTED") // REQUESTED, PROVIDED, NOT_PROVIDED
+  providedAt          DateTime?
+  providedBy          String?
+  
+  createdAt           DateTime @default(now())
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  docType             CustomerDocType @relation(fields: [docTypeId], references: [id])
+  
+  @@map("document_requests")
+}
+
+// ============================================================================
+// CAPA & BUDGET
+// ============================================================================
+
+model CapaAction {
+  id                  String   @id @default(cuid())
+  actionId            String   @unique
+  auditId             String
+  defectId            String?
+  systemId            String?
+  
+  actionTitle         String
+  actionDetails       String?
+  priority            String?
+  
+  responsibleParty    String?
+  responsiblePerson   String?
+  dueDate             DateTime?
+  
+  closureCriteria     String?
+  verificationMethod  String?
+  
+  status              String   @default("NOT_STARTED")
+  comments            String?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  defect              Defect?  @relation(fields: [defectId], references: [id])
+  estimateLines       EstimateLine[]
+  
+  @@map("capa_actions")
+}
+
+model Estimate {
+  id                  String   @id @default(cuid())
+  estimateId          String   @unique
+  auditId             String
+  
+  estimateType        String   @default("ROM") // ROM, DETAILED
+  accuracy            String?  // "±30%"
+  assumptions         String?
+  
+  totalLaborCost      Float    @default(0)
+  totalMaterialsCost  Float    @default(0)
+  totalCost           Float    @default(0)
+  
+  createdAt           DateTime @default(now())
+  createdBy           String?
+  updatedAt           DateTime @updatedAt
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  lines               EstimateLine[]
+  
+  @@map("estimates")
+}
+
+model EstimateLine {
+  id                  String   @id @default(cuid())
+  estimateId          String
+  lineId              String
+  
+  defectId            String?
+  capaActionId        String?
+  
+  workType            String?
+  unit                String?
+  qty                 Float?
+  
+  laborHours          Float?
+  laborRate           Float?
+  laborCost           Float?
+  
+  materialsDesc       String?
+  materialsQty        Float?
+  materialsUnitPrice  Float?
+  materialsCost       Float?
+  
+  totalCost           Float?
+  notes               String?
+
+  estimate            Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  defect              Defect?  @relation(fields: [defectId], references: [id])
+  capaAction          CapaAction? @relation(fields: [capaActionId], references: [id])
+  
+  @@map("estimate_lines")
+}
+
+// ============================================================================
+// PACK GENERATION & QC
+// ============================================================================
+
+model AuditPackIssue {
+  id                  String   @id @default(cuid())
+  auditId             String
+  version             String   // v1.0, v1.1
+  status              String   // DRAFT, PRELIMINARY, FINAL
+  
+  qcStatus            String?  // PASS, WARN, FAIL
+  qcReport            Json?    // QC результаты
+  
+  documentsIncluded   String[] // ["DOC-01", "DOC-02", ...]
+  
+  zipUrl              String?
+  zipHash             String?
+  
+  issuedBy            String?
+  issuedAt            DateTime @default(now())
+
+  audit               Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  
+  @@map("audit_pack_issues")
+}
+
+// ============================================================================
+// USERS & ROLES (Simplified for MVP)
+// ============================================================================
+
+model Person {
+  id                  String   @id @default(cuid())
+  personId            String   @unique
+  fullName            String
+  role                String   // FE, LA, AN, PM, ADMIN
+  organization        String?
+  contact             String?
+  permissions         String[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@map("persons")
+}
+
+// ============================================================================
+// NEW PROJECT & AUDIT STRUCTURE (Aligning with current implementation)
+// ============================================================================
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  customer    String?
+  description String?
+  status      String   @default("PLANNING")
+  startDate   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  checklists  AuditChecklist[]
+  @@map("projects")
+}
+
+model AuditChecklist {
+  id               String   @id @default(cuid())
+  projectId        String
+  requirementSetId String
+  status           String   @default("PENDING")
+  summary          String?
+  risks            String?
+  recommendations  String?
+  auditorName      String?
+  
+  // Report Settings
+  facilityDescription String?
+  contractNumber      String?
+  auditorTitle        String?
+  companyLogoUrl      String?
+
+  startedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirementSet   RequirementSet @relation(fields: [requirementSetId], references: [id])
+  results          AuditResult[]
+  @@map("audit_checklists")
+}
+
+model AuditResult {
+  id            String   @id @default(cuid())
+  checklistId   String
+  requirementId String
+  status        String   @default("NOT_CHECKED")
+  comment       String?
+  photos        Json?    @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  checklist     AuditChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  requirement   Requirement    @relation(fields: [requirementId], references: [id])
+  @@map("audit_results")
+}
