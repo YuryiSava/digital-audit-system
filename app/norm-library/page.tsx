@@ -2,12 +2,19 @@ import Link from "next/link";
 import { ArrowLeft, Database, FileText } from "lucide-react";
 import { getNormSources } from "@/app/actions/norm-library";
 import { CreateNormDialog } from "@/components/norm-library/create-norm-dialog";
+import { DeleteNormButton } from "./delete-norm-button";
 import { formatDate } from "@/lib/utils";
+import { getCurrentUser } from "@/app/actions/team";
 
 // Server Component
 export default async function NormLibraryPage() {
     // Fetch data
-    const { data: norms } = await getNormSources();
+    const [{ data: norms }, currentUser] = await Promise.all([
+        getNormSources(),
+        getCurrentUser()
+    ]);
+
+    const isAdmin = currentUser?.profile?.role === 'admin';
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -36,7 +43,7 @@ export default async function NormLibraryPage() {
                         </div>
 
                         {/* Action Button */}
-                        <CreateNormDialog />
+                        {isAdmin && <CreateNormDialog />}
                     </div>
                 </div>
             </header>
@@ -133,9 +140,17 @@ export default async function NormLibraryPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <Link href={`/norm-library/${norm.id}`} className="text-sm text-blue-400 hover:text-blue-300">
-                                                Открыть
-                                            </Link>
+                                            <div className="flex items-center gap-3">
+                                                <Link href={`/norm-library/${norm.id}`} className="text-sm text-blue-400 hover:text-blue-300">
+                                                    Открыть
+                                                </Link>
+                                                {isAdmin && (
+                                                    <>
+                                                        <span className="text-gray-600">|</span>
+                                                        <DeleteNormButton normId={norm.id} normCode={norm.code} />
+                                                    </>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

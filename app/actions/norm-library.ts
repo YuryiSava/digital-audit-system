@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { writeFile } from 'fs/promises';
@@ -20,7 +20,6 @@ const NormSourceSchema = z.object({
 
 /**
  * Transliterate Cyrillic to Latin for safe filenames
- * Preserves ASCII characters, converts Cyrillic to Latin equivalents
  */
 function transliterateFilename(filename: string): string {
     const translitMap: Record<string, string> = {
@@ -40,7 +39,7 @@ function transliterateFilename(filename: string): string {
         .split('')
         .map(char => translitMap[char] || char)
         .join('')
-        .replace(/[^a-zA-Z0-9_.-]/g, '_'); // Replace remaining unsafe chars
+        .replace(/[^a-zA-Z0-9_.-]/g, '_');
 }
 
 
@@ -49,6 +48,7 @@ export async function getNormSources(filters?: {
     search?: string;
     status?: string;
 }) {
+    const supabase = createClient();
     let query = supabase
         .from('norm_sources')
         .select('*')
@@ -77,6 +77,7 @@ export async function getNormSources(filters?: {
 }
 
 export async function getNormById(id: string) {
+    const supabase = createClient();
     // Fetch norm source
     const { data: normData, error: normError } = await supabase
         .from('norm_sources')
@@ -88,34 +89,43 @@ export async function getNormById(id: string) {
         return { success: false, error: normError?.message || 'Norm not found' };
     }
 
-    // Fetch associated files
-    const { data: filesData } = await supabase
-        .from('norm_files')
-        .select('*')
-        .eq('normSourceId', id);
+    // Fetch files and requirements in parallel
+    const [filesResult, requirementsResult] = await Promise.all([
+        supabase.from('norm_files').select('*').eq('normSourceId', id),
+        supabase.from('requirements').select('*').eq('normSourceId', id)
+    ]);
 
-    // Fetch associated requirements
-    const { data: requirementsData } = await supabase
-        .from('requirements')
-        .select('*')
-        .eq('normSourceId', id);
+    const filesData = filesResult.data || [];
+    const requirementsData = requirementsResult.data || [];
 
     // Sort requirements by clause
-    const sortedRequirements = (requirementsData || []).sort((a: any, b: any) =>
+    const sortedRequirements = requirementsData.sort((a: any, b: any) =>
         (a.clause || '').localeCompare(b.clause || '', undefined, { numeric: true })
     );
 
-    // Combine data
+    // Fetch requirement set if needed
+    let requirementSet = null;
+    if (sortedRequirements.length > 0) {
+        const { data: reqSetData } = await supabase
+            .from('requirement_sets')
+            .select('*')
+            .eq('id', sortedRequirements[0].requirementSetId)
+            .single();
+        requirementSet = reqSetData;
+    }
+
     const data = {
         ...normData,
         files: filesData || [],
-        requirements: sortedRequirements
+        requirements: sortedRequirements,
+        requirementSet: requirementSet
     };
 
     return { success: true, data };
 }
 
 export async function createNormSource(formData: FormData) {
+    const supabase = createClient();
     const rawData = {
         jurisdiction: formData.get('jurisdiction'),
         docType: formData.get('docType'),
@@ -135,13 +145,11 @@ export async function createNormSource(formData: FormData) {
     const { editionDate, ...rest } = validation.data;
     const file = formData.get('file') as File | null;
 
-    // 1. Prepare Metadata
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const normSourceId = `NORM-${rest.jurisdiction}-${randomSuffix}`;
     const now = new Date().toISOString();
     const sourceUUID = crypto.randomUUID();
 
-    // 2. Insert Norm Source
     const { error: insertError } = await supabase
         .from('norm_sources')
         .insert([
@@ -163,52 +171,38 @@ export async function createNormSource(formData: FormData) {
         return { success: false, error: insertError.message };
     }
 
-    // 3. Handle File Upload (if present)
     if (file && file.size > 0) {
         try {
             const bytes = await file.arrayBuffer();
             const buffer = Buffer.from(bytes);
-
-            // Create directory if not exists
             const uploadDir = join(process.cwd(), 'public', 'uploads', 'norms');
             await mkdir(uploadDir, { recursive: true });
 
-            // Generate safe filename for storage (ASCII only for filesystem)
-            // But keep original name with Cyrillic for display
             const safeName = transliterateFilename(file.name);
             const uniqueFileName = `${Date.now()}-${safeName}`;
             const filePath = join(uploadDir, uniqueFileName);
 
-            // Write File
             await writeFile(filePath, buffer);
-
-            // Insert into norm_files with ORIGINAL name (with Cyrillic)
             const fileUrl = `/uploads/norms/${uniqueFileName}`;
 
-            const { error: fileError } = await supabase
+            await supabase
                 .from('norm_files')
                 .insert([
                     {
                         id: crypto.randomUUID(),
                         normSourceId: sourceUUID,
-                        fileName: file.name, // Original name with Cyrillic for display
+                        fileName: file.name,
                         fileType: file.name.split('.').pop() || 'unknown',
                         fileSize: file.size,
-                        fileHash: 'pending', // TODO: Calculate hash
+                        fileHash: 'pending',
                         storageUrl: fileUrl,
                         accessLevel: 'INTERNAL',
                         uploadedAt: now
                     }
                 ]);
 
-            if (fileError) {
-                console.error('File metadata save error:', fileError);
-                // Non-fatal, but good to know
-            }
-
         } catch (uploadErr) {
             console.error('File upload failed:', uploadErr);
-            return { success: false, error: 'Failed to upload file' };
         }
     }
 
@@ -217,6 +211,7 @@ export async function createNormSource(formData: FormData) {
 }
 
 export async function uploadFileToNorm(normId: string, formData: FormData) {
+    const supabase = createClient();
     const file = formData.get('file') as File | null;
 
     if (!file) {
@@ -224,12 +219,9 @@ export async function uploadFileToNorm(normId: string, formData: FormData) {
     }
 
     try {
-        // Ensure upload directory exists
         const uploadDir = join(process.cwd(), 'public', 'uploads', 'norms');
         await mkdir(uploadDir, { recursive: true });
 
-        // Save file with transliterated name for filesystem
-        // but keep original Cyrillic name in database
         const buffer = Buffer.from(await file.arrayBuffer());
         const safeName = transliterateFilename(file.name);
         const uniqueFileName = `${Date.now()}-${safeName}`;
@@ -237,7 +229,6 @@ export async function uploadFileToNorm(normId: string, formData: FormData) {
 
         await writeFile(filePath, buffer);
 
-        // Insert into norm_files
         const fileUrl = `/uploads/norms/${uniqueFileName}`;
         const now = new Date().toISOString();
 
@@ -272,22 +263,92 @@ export async function uploadFileToNorm(normId: string, formData: FormData) {
 }
 
 export async function deleteNormSource(id: string) {
-    const { error } = await supabase
-        .from('norm_sources')
-        .delete()
-        .eq('id', id);
+    // Use admin client to bypass RLS for cascade delete
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+    const supabase = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    );
 
-    if (error) {
-        return { success: false, error: error.message };
+    try {
+        // 1. Delete assignment checks for requirements of this norm
+        const { data: reqs } = await supabase
+            .from('requirements')
+            .select('id')
+            .eq('normSourceId', id);
+
+        if (reqs && reqs.length > 0) {
+            const reqIds = reqs.map(r => r.id);
+            await supabase
+                .from('assignment_checks')
+                .delete()
+                .in('requirementId', reqIds);
+        }
+
+        // 2. Delete requirements
+        await supabase
+            .from('requirements')
+            .delete()
+            .eq('normSourceId', id);
+
+        // 3. Delete raw fragments
+        await supabase
+            .from('raw_norm_fragments')
+            .delete()
+            .eq('normSourceId', id);
+
+        // 4. Delete files from storage and database
+        const { data: files } = await supabase
+            .from('norm_files')
+            .select('*')
+            .eq('normSourceId', id);
+
+        if (files && files.length > 0) {
+            for (const file of files) {
+                // Delete from storage if it's a storage URL
+                if (file.storageUrl?.includes('supabase')) {
+                    const pathMatch = file.storageUrl.match(/norm-docs\/(.+)/);
+                    if (pathMatch) {
+                        await supabase.storage
+                            .from('norm-docs')
+                            .remove([pathMatch[1]]);
+                    }
+                }
+            }
+
+            // Delete file records
+            await supabase
+                .from('norm_files')
+                .delete()
+                .eq('normSourceId', id);
+        }
+
+        // 5. Finally, delete the norm source itself
+        const { error } = await supabase
+            .from('norm_sources')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        revalidatePath('/norm-library');
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
-
-    revalidatePath('/norm-library');
-    return { success: true };
 }
 
 export async function deleteNormFile(fileId: string, normId: string) {
+    const supabase = createClient();
     try {
-        // 1. Get file info to delete from disk
         const { data: fileRecord, error: fetchError } = await supabase
             .from('norm_files')
             .select('storageUrl')
@@ -298,20 +359,16 @@ export async function deleteNormFile(fileId: string, normId: string) {
             return { success: false, error: 'File not found' };
         }
 
-        // 2. Delete from disk (if exists)
         try {
             const relativePath = fileRecord.storageUrl;
-            // Handle cleanup if path is relative
             const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
             const absolutePath = join(process.cwd(), 'public', cleanPath);
-            const fs = require('fs/promises'); // Dynamic import for server actions context
+            const fs = require('fs/promises');
             await fs.unlink(absolutePath);
         } catch (filesErr) {
             console.warn(`Could not delete file from disk: ${filesErr}`);
-            // Continue to delete from DB even if disk delete fails (maybe file didn't exist)
         }
 
-        // 3. Delete from DB
         const { error: deleteError } = await supabase
             .from('norm_files')
             .delete()
