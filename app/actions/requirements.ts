@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -17,12 +17,14 @@ const RequirementSetSchema = z.object({
 export type RequirementSetData = z.infer<typeof RequirementSetSchema>;
 
 export async function getRequirementSets() {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('requirement_sets')
         .select(`
       *,
       system:systems(name)
     `)
+        .in('status', ['PUBLISHED', 'ACTIVE'])  // Show both published and active sets
         .order('updatedAt', { ascending: false });
 
     if (error) {
@@ -92,6 +94,64 @@ export async function createRequirementSet(data: RequirementSetData) {
     revalidatePath('/requirements');
     return { success: true, data: newSet };
 }
+
+/**
+ * Publish a RequirementSet (change status from DRAFT to PUBLISHED)
+ */
+export async function publishRequirementSet(id: string) {
+    try {
+        const { data, error } = await supabase
+            .from('requirement_sets')
+            .update({
+                status: 'PUBLISHED',
+                updatedAt: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error publishing requirement set:', error);
+            return { success: false, error: error.message };
+        }
+
+        revalidatePath('/requirements');
+        revalidatePath('/requirement-sets');
+        return { success: true, data };
+
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Publish all DRAFT RequirementSets
+ */
+export async function publishAllRequirementSets() {
+    try {
+        const { data, error } = await supabase
+            .from('requirement_sets')
+            .update({
+                status: 'PUBLISHED',
+                updatedAt: new Date().toISOString()
+            })
+            .eq('status', 'DRAFT')
+            .select();
+
+        if (error) {
+            console.error('Error publishing all requirement sets:', error);
+            return { success: false, error: error.message };
+        }
+
+        revalidatePath('/requirements');
+        revalidatePath('/requirement-sets');
+        return { success: true, count: data?.length || 0 };
+
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
 
 // --- Requirements (Требования) ---
 
