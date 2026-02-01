@@ -1,4 +1,4 @@
-import { Camera, MapPin, Calendar, Image as ImageIcon } from 'lucide-react';
+import { Camera, MapPin, Calendar, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
 import { ReportHeader, ReportFooter } from '../shared/layout-elements';
 
 export function Doc06Photos({ checklist }: { checklist: any }) {
@@ -7,7 +7,7 @@ export function Doc06Photos({ checklist }: { checklist: any }) {
     // Фильтруем только результаты с фотографиями
     const itemsWithPhotos = results.filter((r: any) => r.photos && r.photos.length > 0);
 
-    // Flat list of all photos to simpler mapping
+    // Сплющиваем список для отображения в сетке
     const allPhotos: any[] = [];
     itemsWithPhotos.forEach((item: any, itemIdx: number) => {
         item.photos.forEach((url: string, photoIdx: number) => {
@@ -24,23 +24,24 @@ export function Doc06Photos({ checklist }: { checklist: any }) {
         <div className="bg-white p-12 min-h-[29.7cm] relative text-slate-900 font-sans">
             <ReportHeader title="Фото-приложение" docNumber="DOC-06" checklist={checklist} />
 
-            <div className="mb-6 flex justify-between items-end border-b border-slate-200 pb-4">
+            <div className="mb-8 flex justify-between items-end border-b border-slate-200 pb-4">
                 <p className="text-slate-500 text-sm max-w-2xl">
-                    Фотофиксация выявленных несоответствий и общего состояния системы.
+                    Фотофиксация технического состояния, подтвержденных дефектов и доказательной базы.
+                    Все фотографии содержат встроенные цифровые водяные знаки для верификации.
                 </p>
-                <div className="flex items-center gap-2 text-slate-400">
-                    <ImageIcon className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Всего снимков: {allPhotos.length}</span>
+                <div className="flex items-center gap-3 text-slate-900 bg-slate-100 px-4 py-2 rounded-lg font-bold">
+                    <ImageIcon className="w-5 h-5 text-blue-600" />
+                    <span className="text-xs uppercase tracking-tighter">Снимков: {allPhotos.length}</span>
                 </div>
             </div>
 
             <div className="space-y-8">
                 {allPhotos.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-10">
+                    <div className="grid grid-cols-2 gap-x-10 gap-y-12">
                         {allPhotos.map((photo: any) => (
-                            <div key={`${photo.id}-${photo.photoUrl}`} className="break-inside-avoid flex flex-col h-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                            <div key={`${photo.id}-${photo.photoUrl}`} className="break-inside-avoid flex flex-col h-full bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                                 {/* Photo Frame */}
-                                <div className="aspect-[4/3] bg-gray-200 relative group">
+                                <div className="aspect-[4/3] bg-slate-100 relative group border-b border-slate-100">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
                                         src={photo.photoUrl}
@@ -48,40 +49,45 @@ export function Doc06Photos({ checklist }: { checklist: any }) {
                                         alt={`Фото ${photo.localIdx}`}
                                     />
 
-                                    {/* Overlays */}
-                                    <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded text-[10px] font-mono border border-white/20">
-                                        IMG_{photo.globalIdx.toString().padStart(4, '0')}
+                                    {/* Index Overlay */}
+                                    <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-[10px] font-bold border border-white/10 shadow-lg">
+                                        ID {photo.globalIdx.toString().padStart(3, '0')}
                                     </div>
-                                    <div className="absolute bottom-3 right-3 bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded text-[10px] flex items-center gap-1.5 border border-white/20">
-                                        <Calendar className="w-3 h-3" />
-                                        {new Date(checklist.createdAt).toLocaleDateString()}
+
+                                    {/* Status Badge */}
+                                    <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest backdrop-blur-md shadow-lg border ${(photo.status === 'DEFECT' || photo.status === 'VIOLATION')
+                                        ? 'bg-red-600/90 text-white border-red-400/50'
+                                        : 'bg-emerald-600/90 text-white border-emerald-400/50'
+                                        }`}>
+                                        {(photo.status === 'DEFECT' || photo.status === 'VIOLATION') ? 'DEFECT' : 'VERIFIED'}
                                     </div>
                                 </div>
 
                                 {/* Caption Area */}
-                                <div className="p-4 flex flex-col flex-1">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="text-xs font-mono font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
-                                            <span className="text-[9px] text-slate-400 mr-1">{photo.requirement.normSource?.code}</span>
-                                            {photo.requirement.clause}
+                                <div className="p-5 flex flex-col flex-1 bg-gradient-to-b from-white to-slate-50">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="text-[10px] font-bold text-slate-900 bg-slate-200/50 border border-slate-300 px-2 py-1 rounded">
+                                            <span className="text-slate-500 mr-2">{photo.requirement?.clause}</span>
+                                            {photo.requirement?.normSource?.code}
                                         </div>
-                                        <div className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${photo.status === 'VIOLATION' || photo.status === 'FAIL' ? 'bg-red-100 text-red-700' :
-                                            photo.status === 'WARNING' ? 'bg-amber-100 text-amber-700' :
-                                                'bg-emerald-100 text-emerald-700'
-                                            }`}>
-                                            {photo.status === 'VIOLATION' || photo.status === 'FAIL' ? 'Critical' : photo.status === 'WARNING' ? 'Warning' : 'Info'}
+                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium italic">
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            {new Date(checklist.createdAt).toLocaleDateString()}
                                         </div>
                                     </div>
 
-                                    <p className="text-xs font-medium text-slate-800 mb-2 leading-relaxed">
-                                        {photo.requirement.requirementTextShort}
+                                    <p className="text-[11px] font-bold text-slate-800 mb-3 leading-snug">
+                                        {photo.requirement?.content}
                                     </p>
 
                                     {photo.comment && (
-                                        <div className="mt-auto pt-3 border-t border-slate-200/50">
-                                            <p className="text-[10px] text-slate-500 italic">
-                                                "{photo.comment}"
-                                            </p>
+                                        <div className="mt-auto pt-4 border-t border-slate-200">
+                                            <div className="flex items-start gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                                                <p className="text-[10px] text-slate-600 italic leading-relaxed">
+                                                    «{photo.comment}»
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -89,12 +95,12 @@ export function Doc06Photos({ checklist }: { checklist: any }) {
                         ))}
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
-                        <div className="bg-white p-4 rounded-full mb-4 shadow-sm border border-slate-100">
-                            <Camera className="w-8 h-8 opacity-20" />
+                    <div className="flex flex-col items-center justify-center py-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400">
+                        <div className="bg-white p-6 rounded-full mb-6 shadow-sm border border-slate-100">
+                            <Camera className="w-12 h-12 text-slate-200" />
                         </div>
-                        <p className="text-lg font-medium text-slate-600">Фотографии отсутствуют</p>
-                        <p className="text-sm max-w-sm text-center mt-1">В ходе аудита фотофиксация не проводилась или изображения не были загружены в систему.</p>
+                        <p className="text-xl font-black text-slate-700 uppercase tracking-widest">Фотоархив пуст</p>
+                        <p className="text-xs max-w-xs text-center mt-2 font-medium">Снимки не были загружены или аудит проводился без фотофиксации.</p>
                     </div>
                 )}
             </div>

@@ -1,12 +1,28 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 // --- Checklists (Привязка каталога к проекту) ---
 
 export async function createAuditChecklist(projectId: string, requirementSetId: string) {
+    const supabase = createClient();
     const now = new Date().toISOString();
+
+    // 0. Check if this requirement set is already added to this project
+    const { data: existingChecklist, error: checkError } = await supabase
+        .from('audit_checklists')
+        .select('id')
+        .eq('projectId', projectId)
+        .eq('requirementSetId', requirementSetId)
+        .maybeSingle();
+
+    if (existingChecklist) {
+        return {
+            success: false,
+            error: 'Этот раздел аудита уже добавлен в проект'
+        };
+    }
 
     // 1. Создаем сам чек-лист
     const { data: checklist, error } = await supabase
@@ -29,9 +45,6 @@ export async function createAuditChecklist(projectId: string, requirementSetId: 
     }
 
     // 2. Автоматически создаем пустые результаты для всех требований из этого набора
-    // Чтобы аудитор сразу видел пункты, которые нужно проверить
-
-    // Получаем требования
     const { data: requirements } = await supabase
         .from('requirements')
         .select('id')
@@ -59,13 +72,18 @@ export async function createAuditChecklist(projectId: string, requirementSetId: 
 }
 
 export async function getProjectChecklists(projectId: string) {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('audit_checklists')
         .select(`
             *,
             requirementSet:requirement_sets (
-                id, requirementSetId, version,
+                id, requirementSetId, version, name, notes,
                 system:systems(name, systemId)
+            ),
+            results:audit_results (
+                id,
+                status
             )
         `)
         .eq('projectId', projectId)
@@ -73,22 +91,20 @@ export async function getProjectChecklists(projectId: string) {
 
     if (error) return { success: false, error: error.message };
 
-    // Подсчет прогресса
-    // Это можно оптимизировать, но пока сделаем отдельным запросом или в цикле, если данных мало
-    // Для MVP просто вернем список
     return { success: true, data };
 }
 
 // --- Audit Execution (Проведение аудита) ---
 
 export async function getChecklistDetails(checklistId: string) {
+    const supabase = createClient();
     const { data: checklist, error } = await supabase
         .from('audit_checklists')
         .select(`
             *,
             project:projects(*),
             requirementSet:requirement_sets (
-                id, requirementSetId, version,
+                id, requirementSetId, version, name, notes,
                 system:systems(name)
             ),
             results:audit_results (
@@ -114,7 +130,19 @@ export async function getChecklistDetails(checklistId: string) {
     return { success: true, data: checklist };
 }
 
-export async function saveAuditResult(resultId: string, status: string, comment?: string, photos?: string[]) {
+export async function saveAuditResult(
+    resultId: string,
+    status: string,
+    comment?: string,
+    photos?: string[],
+    quantitativeData?: {
+        isMultiple?: boolean;
+        totalCount?: number;
+        failCount?: number;
+        inspectionMethod?: string;
+    }
+) {
+    const supabase = createClient();
     const now = new Date().toISOString();
 
     const updateData: any = {
@@ -123,6 +151,13 @@ export async function saveAuditResult(resultId: string, status: string, comment?
     };
     if (comment !== undefined) updateData.comment = comment;
     if (photos !== undefined) updateData.photos = photos;
+
+    if (quantitativeData) {
+        if (quantitativeData.isMultiple !== undefined) updateData.isMultiple = quantitativeData.isMultiple;
+        if (quantitativeData.totalCount !== undefined) updateData.totalCount = quantitativeData.totalCount;
+        if (quantitativeData.failCount !== undefined) updateData.failCount = quantitativeData.failCount;
+        if (quantitativeData.inspectionMethod !== undefined) updateData.inspectionMethod = quantitativeData.inspectionMethod;
+    }
 
     const { error } = await supabase
         .from('audit_results')
@@ -145,6 +180,7 @@ export async function updateChecklistDetails(checklistId: string, data: {
     auditorTitle?: string,
     companyLogoUrl?: string
 }) {
+    const supabase = createClient();
     const { error } = await supabase
         .from('audit_checklists')
         .update({ ...data, updatedAt: new Date().toISOString() })
@@ -154,4 +190,65 @@ export async function updateChecklistDetails(checklistId: string, data: {
     revalidatePath(`/audit/${checklistId}`);
     revalidatePath(`/audit/${checklistId}/report`);
     return { success: true };
+}
+
+export async function deleteAuditChecklist(checklistId: string, projectId: string) {
+    const supabase = createClient();
+    // First delete all audit results for this checklist
+    const { error: resultsError } = await supabase
+        .from('audit_results')
+        .delete()
+        .eq('checklistId', checklistId);
+
+    if (resultsError) {
+        console.error('Error deleting audit results:', resultsError);
+        return { success: false, error: resultsError.message };
+    }
+
+    // Then delete the checklist itself
+    const { error: checklistError } = await supabase
+        .from('audit_checklists')
+        .delete()
+        .eq('id', checklistId);
+
+    if (checklistError) {
+        console.error('Error deleting checklist:', checklistError);
+        return { success: false, error: checklistError.message };
+    }
+
+    revalidatePath(`/projects/${projectId}`);
+    return { success: true };
+}
+
+export async function getProjectFullAuditData(projectId: string) {
+    const supabase = createClient();
+
+    // 1. Get Project
+    const { data: project, error: pError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+    if (pError) return { success: false, error: pError.message };
+
+    // 2. Get all checklists with their requirement sets and results
+    const { data: checklists, error: cError } = await supabase
+        .from('audit_checklists')
+        .select(`
+            *,
+            requirementSet:requirement_sets (
+                id, name,
+                system:systems(name)
+            ),
+            results:audit_results (
+                *,
+                requirement:requirements (*)
+            )
+        `)
+        .eq('projectId', projectId);
+
+    if (cError) return { success: false, error: cError.message };
+
+    return { success: true, project, checklists };
 }

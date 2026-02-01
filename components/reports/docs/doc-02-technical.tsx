@@ -105,8 +105,8 @@ export function Doc02Technical({ checklist }: { checklist: any }) {
                         <div className="flex gap-4 items-start p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
                             <Camera className="w-8 h-8 text-orange-600 shrink-0" />
                             <div>
-                                <h4 className="font-bold text-sm mb-1">Фотофиксация</h4>
-                                <p className="text-xs text-slate-600 leading-snug">Документирование выявленных нарушений для формирования доказательной базы.</p>
+                                <h4 className="font-bold text-sm mb-1">Спец-фотофиксация</h4>
+                                <p className="text-xs text-slate-600 leading-snug">Документирование нарушений с наложением цифровых водяных знаков (GPS, Время, Пункт нормы).</p>
                             </div>
                         </div>
                     </div>

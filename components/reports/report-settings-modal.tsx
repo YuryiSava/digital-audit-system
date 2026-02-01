@@ -6,7 +6,7 @@ import { X, Upload, Save, Loader2, FileText, LayoutTemplate, PenTool, Sparkles }
 import { Button, Input, Label, Textarea } from '@/components/ui/simple-ui';
 import { updateChecklistDetails } from '@/app/actions/audit';
 import { generateAuditReportContent } from '@/app/actions/report-generation';
-import { supabase } from '@/lib/supabaseClient';
+import { uploadEvidence } from '@/app/actions/storage';
 
 interface ReportSettingsModalProps {
     checklist: any;
@@ -69,20 +69,14 @@ export function ReportSettingsModal({ checklist, isOpen, onClose }: ReportSettin
         const filePath = `logos/${fileName}`;
 
         try {
-            const { error: uploadError } = await supabase.storage
-                .from('audit-evidence')
-                .upload(filePath, file);
+            const res = await uploadEvidence(file, filePath);
 
-            if (uploadError) throw uploadError;
+            if (!res.success) throw new Error(res.error);
 
-            const { data } = supabase.storage
-                .from('audit-evidence')
-                .getPublicUrl(filePath);
-
-            setLogoUrl(data.publicUrl);
-        } catch (error) {
+            setLogoUrl(res.publicUrl!);
+        } catch (error: any) {
             console.error('Error uploading logo:', error);
-            alert('Ошибка при загрузке логотипа');
+            alert('Ошибка при загрузке логотипа: ' + error.message);
         } finally {
             setIsLoading(false);
         }

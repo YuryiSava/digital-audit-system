@@ -1,8 +1,9 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { getCurrentUser } from './team';
 
 const ProjectSchema = z.object({
     name: z.string().min(1, "Название обязательно"),
@@ -16,10 +17,24 @@ const ProjectSchema = z.object({
 export type ProjectData = z.infer<typeof ProjectSchema>;
 
 export async function getProjects() {
-    const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('updatedAt', { ascending: false });
+    const supabase = createClient();
+    const currentUser = await getCurrentUser();
+    const role = currentUser?.profile?.role || 'engineer';
+    const userId = currentUser?.id;
+
+    let query = supabase.from('projects').select('*');
+
+    if (role !== 'admin' && (role === 'engineer' || role === 'viewer')) {
+        const { data: assignments } = await supabase
+            .from('project_assignments')
+            .select('project_id')
+            .eq('user_id', userId);
+
+        const assignedIds = assignments?.map(a => a.project_id) || [];
+        query = query.in('id', assignedIds);
+    }
+
+    const { data, error } = await query.order('updatedAt', { ascending: false });
 
     if (error) {
         console.error('Error fetching projects:', error);
@@ -30,6 +45,7 @@ export async function getProjects() {
 }
 
 export async function getProjectById(id: string) {
+    const supabase = createClient();
     const { data: project, error } = await supabase
         .from('projects')
         .select('*')
@@ -42,6 +58,7 @@ export async function getProjectById(id: string) {
 }
 
 export async function createProject(data: ProjectData) {
+    const supabase = createClient();
     const validation = ProjectSchema.safeParse(data);
     if (!validation.success) return { success: false, error: validation.error.format() };
 
@@ -53,7 +70,7 @@ export async function createProject(data: ProjectData) {
         .insert([{
             id: crypto.randomUUID(),
             ...rest,
-            startDate: startDate ? new Date(startDate).toISOString() : now, // Дефолт - сегодня
+            startDate: startDate ? new Date(startDate).toISOString() : now,
             createdAt: now,
             updatedAt: now
         }])
@@ -65,11 +82,22 @@ export async function createProject(data: ProjectData) {
         return { success: false, error: error.message };
     }
 
+    // Auto-assign creator to project
+    const user = await getCurrentUser();
+    if (user) {
+        await supabase.from('project_assignments').insert({
+            project_id: newProject.id,
+            user_id: user.id,
+            role: 'manager'
+        });
+    }
+
     revalidatePath('/projects');
     return { success: true, data: newProject };
 }
 
 export async function deleteProject(id: string) {
+    const supabase = createClient();
     const { error } = await supabase
         .from('projects')
         .delete()

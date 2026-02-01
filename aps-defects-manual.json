@@ -1,0 +1,222 @@
+[
+  {
+    "defect_id": "1",
+    "system": "APS",
+    "location": "ППКП",
+    "defect_fact": "Резервное питание не обеспечивает нормативное время работы",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Заменить аккумуляторные батареи по сроку службы",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 4
+  },
+  {
+    "defect_id": "2",
+    "system": "APS",
+    "location": "ППКП",
+    "defect_fact": "Индикация «Пожар / Неисправность» отображается, но корректность настройки не подтверждена",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Проверить и откорректировать настройки ППКП",
+    "severity": "MEDIUM",
+    "impact": 2,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "3",
+    "system": "APS",
+    "location": "ППКП",
+    "defect_fact": "Автоматическая передача сигнала «Пожар» нестабильна",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Проверить логику, интерфейсы и корректность работы датчиков",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "4",
+    "system": "APS",
+    "location": "Аккумуляторные батареи",
+    "defect_fact": "Срок службы аккумуляторных батарей превышен",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Произвести замену аккумуляторных батарей",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 4
+  },
+  {
+    "defect_id": "5",
+    "system": "APS",
+    "location": "Линии связи LSN",
+    "defect_fact": "Выявлена неисправность кольцевых линий LSN",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Выявить причину и устранить неисправности линий связи",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "6",
+    "system": "APS",
+    "location": "Линии связи LSN",
+    "defect_fact": "Расчёт нагрузки по току отсутствует",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Выполнить расчёт нагрузки и перераспределить адресные устройства",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "7",
+    "system": "APS",
+    "location": "Адресация устройств",
+    "defect_fact": "Актуальная адресная карта системы отсутствует",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Актуализировать адресную карту устройств",
+    "severity": "MEDIUM",
+    "impact": 2,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "8",
+    "system": "APS",
+    "location": "Дымовые пожарные извещатели",
+    "defect_fact": "Часть извещателей не срабатывает при тестировании",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Провести диагностику и заменить неисправные извещатели",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "9",
+    "system": "APS",
+    "location": "Линейные дымовые извещатели",
+    "defect_fact": "Юстировка и чувствительность не подтверждены",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Выполнить настройку и юстировку линейных извещателей",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "10",
+    "system": "APS",
+    "location": "Интерфейсные модули",
+    "defect_fact": "Передача сигналов управления нестабильна",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Выполнить диагностику и восстановить стабильную связь",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "11",
+    "system": "APS",
+    "location": "Интеграция с инженерными системами",
+    "defect_fact": "Запуск смежных систем по сигналу «Пожар» не всегда корректен",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Восстановить корректную логику взаимодействия систем",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "12",
+    "system": "APS",
+    "location": "ПО ППК",
+    "defect_fact": "Версия программного обеспечения не актуальна",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Обновить программное обеспечение ППК",
+    "severity": "MEDIUM",
+    "impact": 2,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "13",
+    "system": "APS",
+    "location": "ПО Fire Monitoring Bosch",
+    "defect_fact": "Программное обеспечение устарело, графический план не соответствует зданию",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Обновить ПО и актуализировать графические планы объекта",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "14",
+    "system": "APS",
+    "location": "Конфигурация и ПО",
+    "defect_fact": "Отсутствуют актуальные конфигурационные файлы системы",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Восстановить и задокументировать конфигурационные файлы",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 4
+  },
+  {
+    "defect_id": "15",
+    "system": "APS",
+    "location": "Конфигурация и ПО",
+    "defect_fact": "Отсутствуют пароли и права доступа для обслуживания системы",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Настроить права доступа и администрирования АПС",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "16",
+    "system": "APS",
+    "location": "Кольцевые линии и нагрузка",
+    "defect_fact": "Перегрузка отдельных кольцевых линий и отключение шлейфов в режиме «Пожар»",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Перераспределить нагрузку и заменить АКБ резервных источников питания",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 4
+  },
+  {
+    "defect_id": "17",
+    "system": "APS",
+    "location": "Пожарные извещатели и модули",
+    "defect_fact": "Имеются неисправные и отключённые извещатели, не во всех помещениях установлены ИП",
+    "noncomplianceStatement": "не указано",
+    "recommendation": "Восстановить покрытие помещений пожарными извещателями",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "18",
+    "system": "APS",
+    "location": "Интеграция с инженерными системами",
+    "defect_fact": "Дренчерная завеса и противопожарные шторы не запускаются автоматически по сигналу «Пожар»",
+    "noncomplianceStatement": "п.41 ППБ РК",
+    "recommendation": "Реализовать автоматический запуск противопожарных устройств от АПС",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 3
+  },
+  {
+    "defect_id": "19",
+    "system": "APS",
+    "location": "Эксплуатационная документация",
+    "defect_fact": "Отсутствуют журналы ТО, регламенты, акты проверок и инструкции",
+    "noncomplianceStatement": "Приказ МЧС РК №55 п.п.73–75",
+    "recommendation": "Разработать и вести полный комплект эксплуатационной документации",
+    "severity": "HIGH",
+    "impact": 3,
+    "likelihood": 4
+  },
+  {
+    "defect_id": "20",
+    "system": "APS",
+    "location": "Эксплуатационные риски",
+    "defect_fact": "Техническое освидетельствование АПС в нормативные сроки не проведено",
+    "noncomplianceStatement": "Приказ МЧС РК №55 п.п.73–75",
+    "recommendation": "Провести техническое освидетельствование и подтвердить соответствие требованиям ПБ",
+    "severity": "CRITICAL",
+    "impact": 4,
+    "likelihood": 4
+  }
+]

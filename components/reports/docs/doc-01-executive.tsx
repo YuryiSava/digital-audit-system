@@ -3,8 +3,7 @@ import { ReportHeader, ReportFooter } from '../shared/layout-elements';
 
 export function Doc01Executive({ checklist }: { checklist: any }) {
     const results = checklist.results || [];
-    const violations = results.filter((r: any) => r.status === 'VIOLATION' || r.status === 'FAIL');
-    const warnings = results.filter((r: any) => r.status === 'WARNING');
+    const defects = results.filter((r: any) => r.status === 'DEFECT');
     const okItems = results.filter((r: any) => r.status === 'OK');
     const naItems = results.filter((r: any) => r.status === 'NA');
 
@@ -36,14 +35,12 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
         verdictText = 'Удовлетворительно';
     }
 
-    // Топ дефектов (пока берем просто первые 5 нарушений, в будущем можно сортировать по критичности)
-    const topDefects = violations.slice(0, 5);
+    const topDefects = defects.slice(0, 5);
 
     return (
         <div className="bg-white p-12 min-h-[29.7cm] relative text-slate-900 font-sans">
             <ReportHeader title="Резюме для руководства" docNumber="DOC-01" checklist={checklist} />
 
-            {/* 1. Введение / Паспорт (Light Version) */}
             <div className="mb-12 border-b-2 border-slate-900 pb-8">
                 <div className="flex justify-between items-start mb-6">
                     <div>
@@ -76,14 +73,13 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
                     </div>
                     <div className="text-right">
                         <div className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Статус отчета</div>
-                        <div className="font-bold text-slate-900 bg-amber-50 text-amber-900 px-2 py-0.5 rounded inline-block text-xs uppercase border border-amber-200">
-                            Confidential / Internal Use
+                        <div className="font-bold text-slate-900 bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded inline-block text-[10px] uppercase border border-emerald-200">
+                            Final Report / Verified
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* 2. Ключевые выводы (Executive Summary) */}
             <section className="mb-10">
                 <div className="mb-10">
                     <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-900 mb-4 border-b-2 border-slate-900 pb-2">
@@ -92,9 +88,7 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
                     <div className="prose prose-sm max-w-none text-slate-700 text-justify leading-relaxed font-serif bg-slate-50/50 p-6 rounded-xl border border-slate-100">
                         {checklist.summary
                             ? checklist.summary.split('\n').map((line: string, i: number) => <p key={i} className="mb-3 last:mb-0">{line}</p>)
-                            : <p className="italic text-slate-400 text-center">
-                                Краткое заключение не заполнено.
-                            </p>
+                            : <p className="italic text-slate-400 text-center py-4">Заключение не сформировано. Воспользуйтесь AI-генератором в настройках.</p>
                         }
                     </div>
                 </div>
@@ -102,59 +96,52 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
                 <div className="grid grid-cols-2 gap-8">
                     <div className="flex flex-col h-full">
                         <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-700 mb-3 border-b border-red-100 pb-2">
-                            <ShieldAlert className="w-4 h-4" /> Главные риски
+                            <ShieldAlert className="w-4 h-4" /> Ключевые риски
                         </h3>
                         <div className="bg-red-50 rounded-xl p-5 border border-red-100 flex-1">
                             {checklist.risks
                                 ? <ul className="list-disc list-outside ml-4 space-y-3 text-xs text-slate-800 font-medium leading-relaxed">
-                                    {checklist.risks.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => <li key={i} className="pl-1">{line.replace(/^-\s*/, '')}</li>)}
+                                    {checklist.risks.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => <li key={i} className="pl-1 text-red-950">{line.replace(/^-\s*/, '')}</li>)}
                                 </ul>
-                                : <div className="text-center text-red-300 text-xs italic py-10">Риски не указаны</div>
+                                : <div className="text-center text-red-300 text-xs italic py-10">Данные не заполнены</div>
                             }
                         </div>
                     </div>
                     <div className="flex flex-col h-full">
                         <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 mb-3 border-b border-blue-100 pb-2">
-                            <CheckCircle2 className="w-4 h-4" /> План действий
+                            <CheckCircle2 className="w-4 h-4" /> Рекомендации
                         </h3>
                         <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 flex-1">
                             {checklist.recommendations
                                 ? <ul className="list-disc list-outside ml-4 space-y-3 text-xs text-slate-800 font-medium leading-relaxed">
-                                    {checklist.recommendations.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => <li key={i} className="pl-1">{line.replace(/^-\s*/, '')}</li>)}
+                                    {checklist.recommendations.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => <li key={i} className="pl-1 text-blue-950">{line.replace(/^-\s*/, '')}</li>)}
                                 </ul>
-                                : <div className="text-center text-blue-300 text-xs italic py-10">Рекомендации не указаны</div>
+                                : <div className="text-center text-blue-300 text-xs italic py-10">Данные не заполнены</div>
                             }
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* 3. Ключевые проблемы (Simplified for Management) */}
             {topDefects.length > 0 && (
                 <section className="mb-0 break-inside-avoid">
                     <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-900 mb-6 border-b-2 border-slate-900 pb-2">
-                        <AlertTriangle className="w-4 h-4 text-red-600" /> Выявленные нарушения (Топ-{topDefects.length})
+                        <AlertTriangle className="w-4 h-4 text-red-600" /> Критические замечания (Топ-{topDefects.length})
                     </h3>
 
                     <div className="grid grid-cols-1 gap-4">
                         {topDefects.map((item: any, idx: number) => (
                             <div key={idx} className="flex gap-4 p-4 bg-white border border-slate-200 rounded-lg shadow-sm items-start">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm border border-red-200 mt-1">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm mt-1">
                                     {idx + 1}
                                 </div>
                                 <div>
-                                    {/* Primary: The Audit Comment (Description of the problem) */}
-                                    <div className="font-bold text-slate-900 text-base mb-1">
-                                        {item.comment
-                                            ? item.comment
-                                            : "Описание нарушения отсутствует (см. требование)"
-                                        }
+                                    <div className="font-bold text-slate-900 text-sm mb-1">
+                                        {item.comment || "Описание дефекта не указано"}
                                     </div>
-
-                                    {/* Secondary: The Norm Requirement */}
-                                    <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 inline-block mt-1">
-                                        <span className="font-bold text-slate-600 mr-2">{item.requirement.clause}:</span>
-                                        {item.requirement.requirementTextShort}
+                                    <div className="text-[10px] text-slate-500 bg-slate-50 px-2 py-1 rounded inline-block mt-1 font-medium italic border border-slate-100">
+                                        <span className="font-bold text-slate-700 mr-2">{item.requirement.clause}:</span>
+                                        {item.requirement.content}
                                     </div>
                                 </div>
                             </div>
@@ -163,12 +150,11 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
                 </section>
             )}
 
-            {/* Подписи */}
             <div className="mt-auto pt-12 break-inside-avoid">
                 <div className="grid grid-cols-2 gap-16">
                     <div>
                         <div className="text-[10px] uppercase font-bold text-slate-400 mb-12 border-b border-slate-300 pb-2">
-                            Аудит провел (Исполнитель)
+                            Аудит провел (Ведущий инженер)
                         </div>
                         <div className="font-serif italic text-xl mb-1 text-slate-800">
                             {checklist.auditorName || '_________________'}
@@ -179,14 +165,13 @@ export function Doc01Executive({ checklist }: { checklist: any }) {
                     </div>
                     <div>
                         <div className="text-[10px] uppercase font-bold text-slate-400 mb-12 border-b border-slate-300 pb-2">
-                            С отчетом ознакомлен
+                            С резюме ознакомлен
                         </div>
                         <div className="font-serif italic text-xl mb-1 text-slate-800">
                             _________________
                         </div>
                         <div className="text-xs text-slate-500">
-                            {/* Дата ознакомления */}
-                            Date: ____ / ____ / 20____
+                            Signature / Date
                         </div>
                     </div>
                 </div>

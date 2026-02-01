@@ -1,10 +1,11 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 
 export async function generateAuditReportContent(checklistId: string) {
     try {
-        console.log('Generating AI report via OpenAI for checklist:', checklistId);
+        console.log('Generating AI report for checklist:', checklistId);
+        const supabase = createClient();
 
         // 1. Fetch Audit Data
         const { data: checklist, error: fetchError } = await supabase
@@ -29,51 +30,43 @@ export async function generateAuditReportContent(checklistId: string) {
 
         // 2. Prepare Data
         const systemName = checklist.requirementSet?.system?.name || 'Система безопасности';
-        const projectInfo = `${checklist.project?.name || 'Объект'} (${checklist.project?.objectType || 'Тип не указан'})`;
+        const projectInfo = `${checklist.project?.name || 'Объект'} (${checklist.project?.address || 'Адрес не указан'})`;
 
-        const defects = checklist.results?.filter((r: any) =>
-            r.status === 'VIOLATION' || r.status === 'FAIL' || r.status === 'WARNING'
-        ) || [];
-
-        const violationsCount = defects.filter((r: any) => r.status === 'VIOLATION' || r.status === 'FAIL').length;
-        const warningsCount = defects.filter((r: any) => r.status === 'WARNING').length;
+        const defects = checklist.results?.filter((r: any) => r.status === 'DEFECT' || r.status === 'VIOLATION') || [];
 
         // Construct Prompt
         let defectsListText = '';
         if (defects.length > 0) {
             defectsListText = defects.slice(0, 50).map((d: any, idx: number) => {
-                const severity = d.status === 'VIOLATION' || d.status === 'FAIL' ? 'КРИТИЧНО' : 'Замечание';
-                return `${idx + 1}. [${severity}] ${d.requirement.clause || 'Пункт нормы'}: ${d.requirement.requirementTextShort || 'Требование'}\n   Суть нарушения: ${d.comment || 'Не указана'}`;
+                return `${idx + 1}. Пункт нормы ${d.requirement.clause || '—'}: ${d.requirement.content || '—'}\n   Выявленный дефект: ${d.comment || 'Описание не указано инженером'}`;
             }).join('\n\n');
         } else {
-            defectsListText = 'Дефектов не выявлено. Система полностью соответствует нормам.';
+            defectsListText = 'Дефектов не выявлено. Система находится в исправном состоянии.';
         }
 
-        const prompt = `Ты - опытный технический аудитор. Проанализируй данные аудита и напиши профессиональное заключение.
+        const prompt = `Ты - ведущий эксперт по техническому аудиту систем безопасности в Казахстане. 
+Проанализируй данные аудита «${systemName}» на объекте «${projectInfo}».
 
-СИСТЕМА: ${systemName}
-ОБЪЕКТ: ${projectInfo}
-СТАТИСТИКА: Критических нарушений: ${violationsCount}, Замечаний: ${warningsCount}
-
-СПИСОК ДЕФЕКТОВ (Топ-50):
+ВЫЯВЛЕННЫЕ ДЕФЕКТЫ:
 ${defectsListText}
 
 ЗАДАЧА:
-Верни JSON объект с тремя полями (все на русском языке, деловой стиль):
-1. "summary": Общее заключение о состоянии (2-3 предложения). Если дефектов много - укажи на критичность. Если нет - похвали.
-2. "risks": Список из 3-5 главных рисков, к которым ведут эти нарушения (каждый пункт с новой строки, без маркеров в начале строки, просто текст).
-3. "recommendations": Список из 3-5 первоочередных мер для устранения (каждый пункт с новой строки, без маркеров).
+Напиши профессиональное заключение для руководства. Стиль строго деловой, экспертный, лаконичный.
+Верни только JSON с полями:
+1. "summary": Экспертное заключение (3-4 предложения). Оцени общее состояние системы.
+2. "risks": Профессиональный список рисков (3-5 пунктов, без номеров), возникающих из-за этих дефектов (пожарная опасность, отказы, штрафы и т.д.).
+3. "recommendations": Краткий план действий (3-5 пунктов, без номеров) для скорейшего исправления.
 
-Формат ответа строго JSON:
+Формат JSON:
 {
   "summary": "...",
-  "risks": "Риск 1\nРиск 2...",
-  "recommendations": "Мера 1\nМера 2..."
+  "risks": "Текст риска 1\\nТекст риска 2...",
+  "recommendations": "Рекомендация 1\\nРекомендация 2..."
 }`;
 
         // 3. Call OpenAI API
         const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured in .env.local' };
+        if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured' };
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -84,7 +77,7 @@ ${defectsListText}
             body: JSON.stringify({
                 model: "gpt-4o-mini",
                 messages: [
-                    { role: "system", content: "You are a helpful assistant that outputs JSON in Russian." },
+                    { role: "system", content: "You are an expert technical auditor. Output strictly JSON in Russian." },
                     { role: "user", content: prompt }
                 ],
                 response_format: { type: "json_object" },
@@ -94,25 +87,19 @@ ${defectsListText}
 
         if (!response.ok) {
             const errText = await response.text();
-            console.error('OpenAI API Error:', response.status, errText);
-            return { success: false, error: `OpenAI Error: ${response.status}` };
+            console.error('OpenAI Error:', response.status, errText);
+            return { success: false, error: `AI Service Error: ${response.status}` };
         }
 
         const result = await response.json();
         const contentStr = result.choices[0]?.message?.content;
 
-        if (!contentStr) return { success: false, error: 'No content from OpenAI' };
+        if (!contentStr) return { success: false, error: 'AI returned empty response' };
 
-        try {
-            const content = JSON.parse(contentStr);
-            return { success: true, data: content };
-        } catch (e) {
-            console.error('JSON parse error:', e);
-            return { success: false, error: 'Failed to parse OpenAI response' };
-        }
+        return { success: true, data: JSON.parse(contentStr) };
 
     } catch (e: any) {
-        console.error('Report generation error:', e);
+        console.error('Report AI Error:', e);
         return { success: false, error: e.message };
     }
 }

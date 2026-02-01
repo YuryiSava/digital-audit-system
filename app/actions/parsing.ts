@@ -6,187 +6,117 @@ import fs from 'fs/promises';
 import path from 'path';
 import { extractPdfText } from '@/lib/pdf-helper-combo';
 
+/**
+ * Эволюционный парсинг НД (v0.5.1)
+ * Обрабатывает документ частями (чанками), что позволяет разбирать файлы любого размера
+ * без перегрузки памяти и лимитов OpenAI.
+ */
 export async function parseNormFile(normId: string, targetSystemId?: string) {
     try {
-        console.log('Starting AI parsing for Norm ID:', normId, 'System:', targetSystemId);
+        console.log(`[AI-Parser] Starting evolved parsing for Norm ID: ${normId}`);
 
-        // 1. Fetch Norm
+        // 1. Получаем данные норматива
         const { data: norm, error: normError } = await supabase
             .from('norm_sources')
             .select('*')
             .eq('id', normId)
             .single();
 
-        if (normError || !norm) {
-            return { success: false, error: 'Norm not found' };
-        }
+        if (normError || !norm) return { success: false, error: 'Норматив не найден в базе' };
 
-        // 2. Fetch associated files with sorting
-        const { data: files, error: filesError } = await supabase
+        // 2. Ищем прикрепленный файл
+        const { data: files } = await supabase
             .from('norm_files')
             .select('*')
             .eq('normSourceId', normId)
-            .order('uploadedAt', { ascending: false }); // Prioritize newest files
+            .order('uploadedAt', { ascending: false });
 
-        if (filesError || !files || files.length === 0) {
-            return { success: false, error: 'No PDF file attached to this norm.' };
-        }
+        if (!files || files.length === 0) return { success: false, error: 'К нормативу не прикреплен PDF файл' };
 
-        // 3. Find first valid file
-        let text = '';
-        let fileUsed = null;
+        // 3. Извлекаем текст (используем комбинированный метод)
+        let fullText = '';
+        const fileRecord = files[0];
+        const cleanPath = fileRecord.storageUrl.startsWith('/') ? fileRecord.storageUrl.substring(1) : fileRecord.storageUrl;
+        const absolutePath = path.join(process.cwd(), 'public', cleanPath);
 
-        for (const fileRecord of files) {
-            const relativePath = fileRecord.storageUrl;
-
-            // Skip ghost files from old test data
-            if (relativePath.includes('test/data')) {
-                console.log(`[Parsing] Skipping ghost test file: ${relativePath}`);
-                continue;
-            }
-
-            // Strategy 1: Trust the DB path (cleaned)
-            const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-            let absolutePath = path.join(process.cwd(), 'public', cleanPath);
-            let exists = false;
-
-            try {
-                await fs.access(absolutePath);
-                exists = true;
-            } catch {
-                // Strategy 2: Fallback to searching by filename in uploads folder
-                const fileName = path.basename(relativePath);
-                const fallbackPath = path.join(process.cwd(), 'public', 'uploads', 'norms', fileName);
-                try {
-                    await fs.access(fallbackPath);
-                    console.log(`[Parsing] Found file via fallback path: ${fallbackPath}`);
-                    absolutePath = fallbackPath;
-                    exists = true;
-                } catch {
-                    console.warn(`[Parsing] File not found at ${absolutePath} or ${fallbackPath}`);
-                }
-            }
-
-            if (!exists) continue;
-
-            try {
-                const stats = await fs.stat(absolutePath);
-                console.log(`[Parsing] Processing file: ${absolutePath} (${stats.size} bytes)`);
-
-                const dataBuffer = await fs.readFile(absolutePath);
-
-                // Use imported helper
-                try {
-                    text = await extractPdfText(dataBuffer);
-                } catch (helperErr: any) {
-                    console.error(`[Parsing] Helper failed for ${absolutePath}:`, helperErr);
-                }
-
-                console.log(`[Parsing] Extracted text length: ${text?.length}`);
-
-                if (text && text.length >= 50) {
-                    fileUsed = fileRecord;
-                    console.log('[Parsing] Valid text extracted. Breaking loop.');
-                    break; // Found a good file
-                } else {
-                    console.warn('[Parsing] Text too short for this file.');
-                }
-            } catch (err: any) {
-                console.warn(`[Parsing] Error processing file ${relativePath}: ${err.message}`);
-                // Continue to next file
-            }
-        }
-
-        if (!text || text.length < 50) {
-            console.error('[Parsing] Final check failed: Text empty or too short.');
-            return { success: false, error: 'Could not extract text from any attached PDF files. Please upload a valid PDF.' };
-        }
-
-        if (!text || text.length < 50) {
-            return { success: false, error: 'Could not extract text from any attached PDF files. Please upload a valid PDF.' };
-        }
-
-        if (!text || text.length < 50) {
-            return { success: false, error: 'PDF text is empty or too short.' };
-        }
-
-        // 4. OpenAI Processing
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-            return { success: false, error: 'OPENAI_API_KEY not configured.' };
-        }
-
-        console.log(`Sending text to OpenAI (${text.length} chars)...`);
-
-        // Truncate text if too long (approx 100k chars to be safe with 128k context)
-        const truncatedText = text.length > 100000 ? text.substring(0, 100000) + '... (truncated)' : text;
-
-        const prompt = `
-Ты - аналитик нормативных документов. Твоя задача - извлечь требования из текста ГОСТа/СНиПа.
-Текст может быть на двух языках (казахский и русский). ПРИОРИТЕТНО используй РУССКУЮ версию текста для извлечения требований (обычно идет второй колонкой или после казахского текста).
-Найди все пункты требований (статьи, пункты), имеющие нумерацию (например, 4.1, 5.2.3, 6.1).
-Игнорируй оглавления, введения, библиографию.
-
-Верни JSON объект с массивом "requirements":
-{
-  "requirements": [
-    { 
-       "clause": "4.1", 
-       "text": "Полный текст требования...", 
-       "severity": "CRITICAL" | "WARNING" | "INFO" (оцени критичность сам)
-    }
-  ]
-}
-
-ТЕКСТ ДОКУМЕНТА:
-${truncatedText}
-        `;
-
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: "You are a helpful assistant that outputs JSON." },
-                    { role: "user", content: prompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.2
-            })
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error('OpenAI Error:', errText);
-            return { success: false, error: `OpenAI API Error: ${response.status}` };
-        }
-
-        const result = await response.json();
-        const contentStr = result.choices[0]?.message?.content;
-
-        let extracted: any[] = [];
         try {
-            const json = JSON.parse(contentStr);
-            extracted = json.requirements || [];
-        } catch (e) {
-            console.error('JSON Parse Error', e);
-            return { success: false, error: 'Failed to parse AI response' };
+            const dataBuffer = await fs.readFile(absolutePath);
+            fullText = await extractPdfText(dataBuffer);
+        } catch (err: any) {
+            console.error(`[AI-Parser] Text extraction failed: ${err.message}`);
+            return { success: false, error: 'Не удалось прочитать текст из PDF' };
         }
 
-        console.log(`AI Extracted ${extracted.length} requirements`);
+        if (!fullText || fullText.length < 100) return { success: false, error: 'Текст в PDF слишком короткий или не распознан' };
 
-        if (extracted.length === 0) {
-            return { success: false, error: 'AI found no requirements in the text.' };
+        console.log(`[AI-Parser] Total text length: ${fullText.length} chars. Splitting into chunks...`);
+
+        // 4. Разбиваем текст на более крупные чанки (~30000 символов), чтобы уменьшить кол-во запросов к ИИ
+        const CHUNK_SIZE = 30000;
+        const chunks: string[] = [];
+        for (let i = 0; i < fullText.length; i += CHUNK_SIZE) {
+            chunks.push(fullText.substring(i, i + CHUNK_SIZE));
         }
 
-        // 5. Save to Database
-        // Create Requirement Set
-        const reqSetId = `RS-${norm.code.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+        console.log(`[AI-Parser] Total chunks to process: ${chunks.length}`);
+
+        const apiKey = process.env.OPENAI_API_KEY;
+        const allExtractedRequirements: any[] = [];
+        const seenClauses = new Set<string>();
+
+        // 5. Обрабатываем чанки ПАРАЛЛЕЛЬНО (батчами по 2), чтобы ускорить процесс и не превысить лимиты
+        const BATCH_SIZE = 2;
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const currentBatch = chunks.slice(i, i + BATCH_SIZE);
+            console.log(`   - Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}...`);
+
+            const batchPromises = currentBatch.map(async (chunk) => {
+                const prompt = `
+Ты - профессиональный эксперт. Твоя задача: найти требования в тексте ГОСТа/СНиПа.
+ФРАГМЕНТ: ${chunk}
+ВЕРНИ ТОЛЬКО JSON: {"requirements": [{"clause": "5.1", "text": "...", "severity": "CRITICAL"}]}
+`;
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        messages: [
+                            { role: "system", content: "You are a specialized technical analyst. Output strictly JSON." },
+                            { role: "user", content: prompt }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.1
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const content = JSON.parse(result.choices[0]?.message?.content);
+                    return content.requirements || [];
+                }
+                return [];
+            });
+
+            const results = await Promise.all(batchPromises);
+            results.flat().forEach((req: any) => {
+                if (req.clause && !seenClauses.has(req.clause)) {
+                    allExtractedRequirements.push(req);
+                    seenClauses.add(req.clause);
+                }
+            });
+        }
+
+        if (allExtractedRequirements.length === 0) {
+            return { success: false, error: 'AI не нашел подходящих требований в документе' };
+        }
+
+        // 6. Сохранение результатов
         const systemId = targetSystemId || 'APS';
+        const reqSetId = `RS-${norm.code.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
 
         const { data: reqSet, error: rsError } = await supabase
             .from('requirement_sets')
@@ -195,9 +125,9 @@ ${truncatedText}
                 requirementSetId: reqSetId,
                 systemId: systemId,
                 jurisdiction: norm.jurisdiction,
-                version: '1.0 (AI-Parsed)',
+                version: `1.1 (Chunked AI-Parsed)`,
                 status: 'DRAFT',
-                notes: `Parsed by GPT-4o-mini from ${norm.code} (Sys: ${systemId})`,
+                notes: `Deep parsed by GPT-4o-mini. Total chunks: ${chunks.length}`,
                 updatedAt: new Date().toISOString()
             })
             .select()
@@ -205,8 +135,7 @@ ${truncatedText}
 
         if (rsError) throw new Error(rsError.message);
 
-        // Insert Requirements
-        const requirementsToInsert = extracted.map((item, idx) => ({
+        const requirementsToInsert = allExtractedRequirements.map((item, idx) => ({
             id: crypto.randomUUID(),
             requirementId: `REQ-${reqSetId}-${idx + 1}`,
             requirementSetId: reqSet.id,
@@ -217,7 +146,7 @@ ${truncatedText}
             requirementTextFull: item.text,
             severityHint: item.severity || 'WARNING',
             checkMethod: 'visual',
-            mustCheck: item.severity === 'CRITICAL', // Logic: mandatory check if critical
+            mustCheck: item.severity === 'CRITICAL',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }));
@@ -229,12 +158,13 @@ ${truncatedText}
         if (batchError) throw new Error(batchError.message);
 
         revalidatePath(`/norm-library/${normId}`);
-        revalidatePath(`/norm-library`);
+        console.log(`✅ Success! Extracted ${allExtractedRequirements.length} requirements in ${chunks.length} chunks.`);
 
-        return { success: true, count: extracted.length };
+        return { success: true, count: allExtractedRequirements.length };
 
     } catch (e: any) {
-        console.error('Parsing process error:', e);
+        console.error('[AI-Parser] Fatal error:', e);
         return { success: false, error: e.message };
     }
 }
+

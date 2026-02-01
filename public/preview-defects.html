@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Просмотр дефектов АПС - Астана опера</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .filter-btn:hover {
+            border-color: #667eea;
+            background: #f7fafc;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .defects-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .defect-card {
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid #cbd5e0;
+            transition: all 0.3s;
+        }
+
+        .defect-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .defect-card.critical {
+            border-left-color: #f56565;
+            background: #fff5f5;
+        }
+
+        .defect-card.high {
+            border-left-color: #ed8936;
+            background: #fffaf0;
+        }
+
+        .defect-card.medium {
+            border-left-color: #ecc94b;
+            background: #fffff0;
+        }
+
+        .defect-card.low {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+        }
+
+        .defect-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        .defect-id {
+            font-size: 0.85rem;
+            color: #718096;
+            font-weight: 600;
+        }
+
+        .severity-badge {
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-critical {
+            background: #f56565;
+            color: white;
+        }
+
+        .severity-high {
+            background: #ed8936;
+            color: white;
+        }
+
+        .severity-medium {
+            background: #ecc94b;
+            color: #744210;
+        }
+
+        .severity-low {
+            background: #48bb78;
+            color: white;
+        }
+
+        .defect-location {
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .location-icon {
+            color: #667eea;
+        }
+
+        .defect-fact {
+            font-size: 1.05rem;
+            color: #2d3748;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .defect-recommendation {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .recommendation-label {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .recommendation-text {
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .defect-meta {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .meta-label {
+            font-weight: 600;
+        }
+
+        .actions {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid #e2e8f0;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #f7fafc;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: #718096;
+        }
+
+        .spinner {
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏛️ Астана опера - Дефекты АПС</h1>
+        <p class="subtitle">Автоматическая пожарная сигнализация</p>
+
+        <div id="stats" class="stats"></div>
+
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterDefects('all')">Все дефекты</button>
+            <button class="filter-btn" onclick="filterDefects('CRITICAL')">Критичные</button>
+            <button class="filter-btn" onclick="filterDefects('HIGH')">Высокие</button>
+            <button class="filter-btn" onclick="filterDefects('MEDIUM')">Средние</button>
+            <button class="filter-btn" onclick="filterDefects('LOW')">Низкие</button>
+        </div>
+
+        <div id="defects" class="loading">
+            <div class="spinner"></div>
+            <p>Загрузка дефектов...</p>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" onclick="window.location.href='http://localhost:3000'">
+                ✅ Импортировать в систему
+            </button>
+            <button class="btn btn-secondary" onclick="downloadJSON()">
+                💾 Скачать JSON
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let allDefects = [];
+        let currentFilter = 'all';
+
+        async function loadDefects() {
+            try {
+                const response = await fetch('/astana-opera-defects-APS.json');
+                allDefects = await response.json();
+                renderStats();
+                renderDefects();
+            } catch (error) {
+                document.getElementById('defects').innerHTML = `
+                    <div style="color: #e53e3e; text-align: center; padding: 2rem;">
+                        <h3>Ошибка загрузки</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderStats() {
+            const stats = {
+                total: allDefects.length,
+                critical: allDefects.filter(d => d.severity === 'CRITICAL').length,
+                high: allDefects.filter(d => d.severity === 'HIGH').length,
+                medium: allDefects.filter(d => d.severity === 'MEDIUM').length,
+                low: allDefects.filter(d => d.severity === 'LOW').length
+            };
+
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">Всего дефектов</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f56565 0%, #c53030 100%);">
+                    <div class="stat-number">${stats.critical}</div>
+                    <div class="stat-label">Критичных</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #ed8936 0%, #c05621 100%);">
+                    <div class="stat-number">${stats.high}</div>
+                    <div class="stat-label">Высоких</div>
+                </div>
+            `;
+        }
+
+        function renderDefects() {
+            const filtered = currentFilter === 'all' 
+                ? allDefects 
+                : allDefects.filter(d => d.severity === currentFilter);
+
+            const html = filtered.map(defect => `
+                <div class="defect-card ${defect.severity.toLowerCase()}">
+                    <div class="defect-header">
+                        <span class="defect-id">Дефект #${defect.defect_id}</span>
+                        <span class="severity-badge severity-${defect.severity.toLowerCase()}">
+                            ${defect.severity}
+                        </span>
+                    </div>
+                    
+                    <div class="defect-location">
+                        <span class="location-icon">📍</span>
+                        ${defect.location}
+                    </div>
+                    
+                    <div class="defect-fact">
+                        ${defect.defect_fact}
+                    </div>
+                    
+                    <div class="defect-recommendation">
+                        <div class="recommendation-label">Рекомендация</div>
+                        <div class="recommendation-text">${defect.recommendation}</div>
+                    </div>
+                    
+                    <div class="defect-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Влияние:</span>
+                            <span>${defect.impact}/4</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Вероятность:</span>
+                            <span>${defect.likelihood}/4</span>
+                        </div>
+                        ${defect.noncomplianceStatement !== 'не указано' ? `
+                            <div class="meta-item">
+                                <span class="meta-label">Нарушение:</span>
+                                <span>${defect.noncomplianceStatement}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('defects').innerHTML = html || 
+                '<div style="text-align: center; color: #718096; padding: 2rem;">Нет дефектов для отображения</div>';
+        }
+
+        function filterDefects(filter) {
+            currentFilter = filter;
+            
+            // Update button states
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            renderDefects();
+        }
+
+        function downloadJSON() {
+            const blob = new Blob([JSON.stringify(allDefects, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'astana-opera-defects-APS.json';
+            a.click();
+        }
+
+        // Load on page load
+        loadDefects();
+    </script>
+</body>
+</html>

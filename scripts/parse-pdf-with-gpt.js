@@ -159,15 +159,16 @@ async function parsePdfWithGpt() {
         for (const fileRecord of validFiles) {
             const relativePath = fileRecord.storageUrl;
             const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-            let absolutePath = path.join(process.cwd(), 'public', cleanPath);
+
+            // Try root directory first (where files actually are)
+            let absolutePath = path.join(process.cwd(), cleanPath);
 
             // Try to access file
             try {
                 await fs.access(absolutePath);
             } catch {
-                // Fallback to uploads folder
-                const fileName = path.basename(relativePath);
-                absolutePath = path.join(process.cwd(), 'public', 'uploads', 'norms', fileName);
+                // Fallback to public/ folder
+                absolutePath = path.join(process.cwd(), 'public', cleanPath);
                 try {
                     await fs.access(absolutePath);
                 } catch {

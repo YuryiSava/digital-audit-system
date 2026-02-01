@@ -133,6 +133,7 @@ model NormSource {
 
   files           NormFile[]
   requirements    Requirement[]
+  rawFragments    RawNormFragment[]
   auditSnapshots  AuditNormSnapshot[]
   
   @@unique([code, editionDate])
@@ -154,6 +155,32 @@ model NormFile {
   normSource      NormSource @relation(fields: [normSourceId], references: [id], onDelete: Cascade)
   
   @@map("norm_files")
+}
+
+// Raw Norm Fragments (Сырые фрагменты норм)
+// Универсальная архитектура: PDF → RawFragments → Requirements
+model RawNormFragment {
+  id                        String   @id @default(cuid())
+  fragmentId                String   @unique // RAW-NORM-0001
+  normSourceId              String
+  sourceSection             String?
+  sourceClause              String?
+  rawText                   String   // Точная цитата
+  detectedModality          String?  // должен, не допускается, следует
+  detectedConditions        String[]
+  detectedParameters        Json?    // [{value, unit, context}]
+  predictedRequirementType  String?  // constructive, functional, etc
+  confidenceScore           Decimal? @db.Decimal(3,2)
+  status                    String   @default("PENDING") // PENDING, APPROVED, REJECTED, CONVERTED
+  createdAt                 DateTime @default(now())
+  reviewedBy                String?
+  convertedToRequirementId  String?
+  updatedAt                 DateTime @updatedAt
+
+  normSource                NormSource   @relation(fields: [normSourceId], references: [id], onDelete: Cascade)
+  convertedToRequirement    Requirement? @relation(fields: [convertedToRequirementId], references: [id])
+  
+  @@map("raw_norm_fragments")
 }
 
 // ============================================================================
@@ -196,6 +223,7 @@ model Requirement {
   checkMethod             String   // visual, document, test, measurement, log
   evidenceTypeExpected    String[] // ["photo", "protocol"]
   mustCheck               Boolean  @default(false)
+  isMultipleHint          Boolean  @default(false)
   tags                    String[]
   applicabilityRules      Json?    // Правила применимости
   severityHint            String?
@@ -209,6 +237,7 @@ model Requirement {
   checkItems              CheckItem[]
   defects                 Defect[]
   auditResults            AuditResult[]
+  sourceFragments         RawNormFragment[] // Фрагменты из которых создано требование
   
   @@map("requirements")
 }
@@ -380,6 +409,12 @@ model CheckItem {
   
   locationScope       String?  // "везде", "выборка", "щитовая"
   samplingRule        String?
+  
+  // Количественный учет для множественных объектов
+  isMultiple          Boolean  @default(false)
+  totalCount          Int?     
+  failCount           Int?     
+  inspectionMethod    String?  // ADDRESSABLE, VISUAL, TESTING
   
   status              String?  // PASS, FAIL, N_A
   checkFact           String?
@@ -694,19 +729,17 @@ model AuditPackIssue {
 // USERS & ROLES (Simplified for MVP)
 // ============================================================================
 
-model Person {
-  id                  String   @id @default(cuid())
-  personId            String   @unique
-  fullName            String
-  role                String   // FE, LA, AN, PM, ADMIN
-  organization        String?
-  contact             String?
-  permissions         String[]
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
-  @@map("persons")
+model UserProfile {
+  id            String   @id @db.Uuid
+  email         String?
+  full_name     String?  @map("full_name")
+  role          String   @default("ENGINEER") // ADMIN, ENGINEER, MANAGER, VIEWER
+  organization  String?
+  avatar_url    String?  @map("avatar_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
 }
 
 // ============================================================================
@@ -723,6 +756,14 @@ model Project {
   startDate   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Pre-Audit Setup fields
+  systemsInScope      String[]  @default([])
+  scopeDepth          String    @default("STANDARD") // BASIC, STANDARD, DEEP
+  scopeExclusions     String?
+  baselineFrozen      Boolean   @default(false)
+  baselineFrozenAt    DateTime?
+  baselineFrozenBy    String?
 
   checklists  AuditChecklist[]
   @@map("projects")
@@ -761,10 +802,30 @@ model AuditResult {
   status        String   @default("NOT_CHECKED")
   comment       String?
   photos        Json?    @default("[]")
+  
+  // Количественный учет
+  isMultiple    Boolean  @default(false)
+  totalCount    Int?
+  failCount     Int?
+  inspectionMethod String? // ADDRESSABLE, VISUAL, TESTING
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   checklist     AuditChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   requirement   Requirement    @relation(fields: [requirementId], references: [id])
   @@map("audit_results")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String?  // Целевой пользователь (если null - для всех админов)
+  type        String   // USER_REGISTERED, SYSTEM_ALERT, PROJECT_ASSIGNED
+  title       String
+  message     String
+  link        String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  @@map("notifications")
 }

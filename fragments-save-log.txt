@@ -1,0 +1,84 @@
+﻿[dotenv@17.2.3] injecting env (6) from .env -- tip: тЬЕ audit secrets and track compliance: https://dotenvx.com/ops
+
+ЁЯТ╛ ╨б╨Ю╨е╨а╨Р╨Э╨Х╨Э╨Ш╨Х ╨д╨а╨Р╨У╨Ь╨Х╨Э╨в╨Ю╨Т ╨Т RAW_NORM_FRAGMENTS
+
+======================================================================
+
+ЁЯУВ Step 1: ╨Ч╨░╨│╤А╤Г╨╖╨║╨░ ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓ ╨╕╨╖ ╤Д╨░╨╣╨╗╨░...
+   тЬЕ ╨Ч╨░╨│╤А╤Г╨╢╨╡╨╜╨╛ 105 ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓
+
+ЁЯУЛ Step 2: ╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╡ ╨╕╨╜╤Д╨╛╤А╨╝╨░╤Ж╨╕╨╕ ╨╛ ╨╜╨╛╤А╨╝╨╡...
+   тЬЕ ╨Э╨╛╤А╨╝╨░: ╨б╨Э ╨а╨Ъ 2.02-02-2023 - ╨Я╨Ю╨Ц╨Р╨а╨Э╨Р╨п ╨Р╨Т╨в╨Ю╨Ь╨Р╨в╨Ш╨Ъ╨Р ╨Ч╨Ф╨Р╨Э╨Ш╨Щ ╨Ш ╨б╨Ю╨Ю╨а╨г╨Ц╨Х╨Э╨Ш╨Щ
+
+ЁЯз╣ Step 3: ╨Ю╤З╨╕╤Б╤В╨║╨░ ╤Б╤В╨░╤А╤Л╤Е PENDING ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓...
+   тЬЕ ╨б╤В╨░╤А╤Л╨╡ PENDING ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╤Л ╤Г╨┤╨░╨╗╨╡╨╜╤Л
+
+ЁЯФД Step 4: ╨Я╤А╨╡╨╛╨▒╤А╨░╨╖╨╛╨▓╨░╨╜╨╕╨╡ ╨▓ ╤Д╨╛╤А╨╝╨░╤В ╨С╨Ф...
+   тЬЕ ╨Я╤А╨╡╨╛╨▒╤А╨░╨╖╨╛╨▓╨░╨╜╨╛ 105 ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓
+
+ЁЯТ╛ Step 5: ╨б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╨╡ ╨▓ ╨▒╨░╨╖╤Г ╨┤╨░╨╜╨╜╤Л╤Е...
+
+node :    тЭМ ╨Ю╤И╨╕╨▒╨║╨░ batch 1: duplicate key valu
+e violates unique constraint "raw_norm_fragments_fragm
+entId_key"
+строка:1 знак:1
++ node scripts/save-fragments-to-raw.js raw-fragments-
+452c6587-bd11-405 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   тЭМ ╨ 
+   Ю╤И╨╕╨▒...fragmentId_key":String) [], RemoteExcep  
+  tion
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Details: {
+  "code": "23505",
+  "details": "Key (\"fragmentId\")=(RAW-NORM-00001) al
+ready exists.",
+  "hint": null,
+  "message": "duplicate key value violates unique cons
+traint \"raw_norm_fragments_fragmentId_key\""
+}
+   тЭМ ╨Ю╤И╨╕╨▒╨║╨░ batch 2: duplicate key value viola
+tes unique constraint "raw_norm_fragments_fragmentId_k
+ey"
+   Details: {
+  "code": "23505",
+  "details": "Key (\"fragmentId\")=(RAW-NORM-00051) al
+ready exists.",
+  "hint": null,
+  "message": "duplicate key value violates unique cons
+traint \"raw_norm_fragments_fragmentId_key\""
+}
+   тЭМ ╨Ю╤И╨╕╨▒╨║╨░ batch 3: duplicate key value viola
+tes unique constraint "raw_norm_fragments_fragmentId_k
+ey"
+
+тЬЕ ╨Т╤Б╨╡╨│╨╛ ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╛: 0/105 ╤Д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓
+
+ЁЯФН Step 6: ╨Я╤А╨╛╨▓╨╡╤А╨║╨░...
+
+   Details: {
+  "code": "23505",
+  "details": "Key (\"fragmentId\")=(RAW-NORM-00101) al
+ready exists.",
+  "hint": null,
+  "message": "duplicate key value violates unique cons
+traint \"raw_norm_fragments_fragmentId_key\""
+}
+   ЁЯУК ╨д╤А╨░╨│╨╝╨╡╨╜╤В╨╛╨▓ ╨▓ ╤Б╤В╨░╤В╤Г╤Б╨╡ PENDING: 0
+
+======================================================================
+ЁЯУК ╨б╨в╨Р╨в╨Ш╨б╨в╨Ш╨Ъ╨Р
+
+╨Я╨╛ ╤В╨╕╨┐╨░╨╝ ╤В╤А╨╡╨▒╨╛╨▓╨░╨╜╨╕╨╣:
+
+╨Я╨╛ ╨╝╨╛╨┤╨░╨╗╤М╨╜╨╛╤Б╤В╨╕:
+
+======================================================================
+тЬЕ ╨д╨а╨Р╨У╨Ь╨Х╨Э╨в╨л ╨б╨Ю╨е╨а╨Р╨Э╨Х╨Э╨л!
+
+тЪая╕П  ╨Т╨Р╨Ц╨Э╨Ю: ╨д╤А╨░╨│╨╝╨╡╨╜╤В╤Л ╨▓ ╤Б╤В╨░╤В╤Г╤Б╨╡ PENDING ╤В╤А╨╡╨▒╤Г╤О╤В ╨▓╨░╨╗╨╕╨┤╨░╤Ж╨╕╨╕ ╤З╨╡╨╗╨╛╨▓╨╡╨║╨╛╨╝!
+
+ЁЯМР ╨Ю╤В╨║╤А╨╛╨╣╤В╨╡ ╨╕╨╜╤В╨╡╤А╤Д╨╡╨╣╤Б ╨▓╨░╨╗╨╕╨┤╨░╤Ж╨╕╨╕: http://localhost:3000/norm-library/452c6587-bd11-4058-b2e7-9476b037e1dd/review
+

@@ -114,17 +114,17 @@ export function AuditWorkspace({ initialResults, checklist, mode = 'desktop' }: 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 
                         {/* Title & Back */}
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 md:gap-4">
                             <Link
-                                href={`/projects/${checklist.projectId}`}
-                                className="p-2 -ml-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                href={mode === 'field' ? `/field/projects/${checklist.projectId}` : `/projects/${checklist.projectId}`}
+                                className="p-2 -ml-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors active:bg-white/20"
                             >
-                                <ArrowLeft className="h-5 w-5" />
+                                <ArrowLeft className="h-6 w-6 md:h-5 md:w-5" />
                             </Link>
                             <div>
-                                <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                                    {checklist.requirementSet?.system?.name}
-                                    <span className="text-xs font-normal text-gray-400 bg-white/10 px-2 py-0.5 rounded">
+                                <h1 className="text-base md:text-lg font-bold text-white flex items-center gap-2 flex-wrap">
+                                    <span className="truncate">{checklist.requirementSet?.system?.name}</span>
+                                    <span className="text-xs font-normal text-gray-400 bg-white/10 px-2 py-0.5 rounded shrink-0">
                                         v{checklist.requirementSet?.version}
                                     </span>
                                 </h1>
@@ -183,11 +183,20 @@ export function AuditWorkspace({ initialResults, checklist, mode = 'desktop' }: 
 
             {/* Finish Modal */}
             {isFinishModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in" onClick={(e) => e.target === e.currentTarget && setIsFinishModalOpen(false)}>
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 md:p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-xl font-bold text-white">Завершение аудита</h2>
-                            <Button variant="ghost" size="sm" onClick={() => setIsFinishModalOpen(false)}><X className="h-4 w-4" /></Button>
+                            <h2 className="text-lg md:text-xl font-bold text-white">Завершение аудита</h2>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsFinishModalOpen(false)}
+                                onTouchEnd={(e) => { e.preventDefault(); setIsFinishModalOpen(false); }}
+                                className="min-w-[44px] min-h-[44px]"
+                            >
+                                <X className="h-5 w-5" />
+                            </Button>
                         </div>
 
                         {validationErrors.length > 0 ? (
@@ -254,15 +263,25 @@ export function AuditWorkspace({ initialResults, checklist, mode = 'desktop' }: 
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2 pt-2">
+                        <div className="flex flex-col gap-3 pt-4">
                             <Button
+                                type="button"
                                 onClick={submitFinishAudit}
+                                onTouchEnd={(e) => { e.preventDefault(); submitFinishAudit(); }}
                                 disabled={validationErrors.length > 0}
-                                className={`w-full ${validationErrors.length > 0 ? 'bg-slate-800 text-slate-500' : 'bg-green-600 hover:bg-green-500'}`}
+                                className={`w-full min-h-[48px] text-base ${validationErrors.length > 0 ? 'bg-slate-800 text-slate-500' : 'bg-green-600 hover:bg-green-500 active:bg-green-700'}`}
                             >
                                 {validationErrors.length > 0 ? 'Исправьте ошибки для сохранения' : 'Сохранить и Создать Отчет'}
                             </Button>
-                            <Button variant="ghost" onClick={() => setIsFinishModalOpen(false)}>Продолжить аудит</Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setIsFinishModalOpen(false)}
+                                onTouchEnd={(e) => { e.preventDefault(); setIsFinishModalOpen(false); }}
+                                className="w-full min-h-[48px] text-base"
+                            >
+                                Продолжить аудит
+                            </Button>
                         </div>
                     </div>
                 </div>

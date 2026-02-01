@@ -1,8 +1,9 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/utils/supabase/server';
 
 export async function getSystemsList() {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('systems')
         .select('*')

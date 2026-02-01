@@ -1,5 +1,14 @@
 'use server';
 
+/**
+ * ⚠️ DEPRECATED - НЕ ИСПОЛЬЗУЕТСЯ! ⚠️
+ * 
+ * Этот файл использует Gemini API и больше НЕ ИСПОЛЬЗУЕТСЯ в системе.
+ * Текущая версия использует OpenAI API.
+ * 
+ * Актуальный парсер: app/actions/universal-parser.ts (OpenAI)
+ */
+
 import { supabase } from '@/lib/supabaseClient';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs/promises';
@@ -7,6 +16,7 @@ import path from 'path';
 
 export async function parseNormFileWithGemini(normId: string) {
     try {
+        console.log('⚠️ WARNING: Using DEPRECATED Gemini parser. Use OpenAI parser instead!');
         console.log('Starting Gemini parsing for Norm ID:', normId);
 
         // 1. Fetch Norm

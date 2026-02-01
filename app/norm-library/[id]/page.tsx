@@ -3,12 +3,13 @@ import { ArrowLeft, FileText, Download, Layers } from "lucide-react";
 import { getNormById } from "@/app/actions/norm-library";
 import { formatDate } from "@/lib/utils";
 import { redirect } from "next/navigation";
-import { ParseButton } from "./parse-button";
 import { UploadFileButton } from "./upload-file-button";
 import { DeleteFileButton } from "./delete-file-button";
 import { DeleteRequirementButton } from "./delete-requirement-button";
 import { AddRequirementButton } from "./add-requirement-button";
 import { EditRequirementButton } from "./edit-requirement-button";
+import { UniversalParseButton } from "./universal-parse-button";
+import TabsView from "./TabsView";
 
 // Disable caching to show fresh data
 export const revalidate = 0;
@@ -115,61 +116,7 @@ export default async function NormDetailPage({ params }: { params: { id: string 
 
                     {/* Right Col: Content / Parsed Data */}
                     <div className="lg:col-span-2 space-y-6">
-                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 min-h-[500px]">
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <Layers className="h-5 w-5 text-purple-400" />
-                                    Требования и Разделы
-                                </h2>
-                                <div className="flex items-center gap-3">
-                                    <AddRequirementButton normId={params.id} />
-                                    <ParseButton normId={params.id} />
-                                </div>
-                            </div>
-
-                            {norm.requirements && norm.requirements.length > 0 ? (
-                                <div className="space-y-4">
-                                    {norm.requirements.map((req: any) => (
-                                        <div key={req.id} className="bg-black/20 p-4 rounded border border-white/5 hover:border-white/10 transition-colors">
-                                            <div className="flex justify-between mb-2">
-                                                <span className="font-mono font-bold text-blue-300 text-sm align-middle flex items-center gap-2">
-                                                    {req.clause}
-                                                    {req.severityHint === 'CRITICAL' && <span className="text-[9px] bg-red-500 text-white px-1 py-0.5 rounded uppercase font-bold tracking-wider">Critical</span>}
-                                                    {req.severityHint === 'HIGH' && <span className="text-[9px] bg-orange-500 text-white px-1 py-0.5 rounded uppercase font-bold tracking-wider">High</span>}
-                                                </span>
-                                                <div className="flex items-center gap-2">
-                                                    {req.mustCheck && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">Обязательно</span>}
-                                                    <EditRequirementButton requirement={req} />
-                                                    <DeleteRequirementButton requirementId={req.id} normId={params.id} />
-                                                </div>
-                                            </div>
-                                            <p className="text-sm text-gray-300 mb-3">{req.requirementTextShort}</p>
-
-                                            <div className="flex flex-wrap gap-2 items-center text-xs text-gray-400">
-                                                <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded border border-white/5">
-                                                    <span className="text-slate-500">Method:</span>
-                                                    <span className={`font-medium ${req.checkMethod === 'measurement' ? 'text-purple-400' : 'text-blue-400'}`}>
-                                                        {req.checkMethod || 'visual'}
-                                                    </span>
-                                                </div>
-
-                                                {req.tags && req.tags.map((tag: string) => (
-                                                    <span key={tag} className="bg-slate-700 px-2 py-1 rounded text-slate-300 text-[10px]">#{tag}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
-                                    <Layers className="h-10 w-10 text-gray-600 mx-auto mb-3" />
-                                    <p className="text-gray-400 mb-2">Требования не извлечены</p>
-                                    <p className="text-sm text-gray-600 max-w-sm mx-auto">
-                                        Система пока не обработала этот документ. Нажмите "Запустить парсинг", чтобы извлечь требования автоматически.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
+                        <TabsView normId={params.id} norm={norm} />
                     </div>
 
                 </div >

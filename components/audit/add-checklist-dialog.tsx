@@ -77,8 +77,8 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
                                     key={set.id}
                                     onClick={() => setSelectedSetId(set.id)}
                                     className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedSetId === set.id
-                                            ? 'bg-blue-500/20 border-blue-500 text-white'
-                                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                                        ? 'bg-blue-500/20 border-blue-500 text-white'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                                         }`}
                                 >
                                     <div className={`h-5 w-5 rounded-full border flex items-center justify-center ${selectedSetId === set.id ? 'border-blue-400 bg-blue-400' : 'border-gray-500'
@@ -86,7 +86,9 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
                                         {selectedSetId === set.id && <CheckSquare className="h-3 w-3 text-white" />}
                                     </div>
                                     <div>
-                                        <div className="font-medium text-sm">{set.system?.name} v{set.version}</div>
+                                        <div className="font-medium text-sm">
+                                            {set.name || `${set.system?.name || 'Система'} v${set.version}`}
+                                        </div>
                                         <div className="text-xs opacity-70">{set.notes || 'Без описания'}</div>
                                     </div>
                                 </div>

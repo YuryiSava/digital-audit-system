@@ -10,3 +10,5 @@ coverage/
 public/uploads/
 parser-output.log
 parser-test.log
+tmp/
+raw-fragments-*.json
