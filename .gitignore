@@ -12,3 +12,5 @@ parser-output.log
 parser-test.log
 tmp/
 raw-fragments-*.json
+backups/
+.vercel

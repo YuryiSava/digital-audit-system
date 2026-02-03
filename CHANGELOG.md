@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.0] - 2026-02-02 - "Offline Phase 1 & Scaling Strategy"
+
+### Added
+- **Offline Mode (Phase 1)**: Core offline-first data sync using IndexedDB (Dexie.js).
+- **SCALING_STRATEGY**: Formalized platform roadmap for MCHS (B2G) and multi-industry expansion (Industrial Safety, Eco, Food Safety).
+- **System State Fixation**: Created `RELEASE_v0.5.4_FINAL_STATE.md` to freeze the codebase before the B2G pivot.
+- **Production Deployment**: Automated Vercel deployment and environment configuration.
+
+### Fixed
+- **Mobile UI Stability**: Fixed touch events, button sizes (48px), and navigation overflows for field engineers.
+- **Defect Statistics**: Real-time violation counting in the Field App.
+
+## [0.5.4] - 2026-02-01 - "Enterprise Hardening"
+
+### Added
+- **Audit Log System**: Comprehensive tracking of all database changes with old/new data snapshots.
+- **Automated Backups**: Daily database backup scripts with 30-day retention policy.
+- **Soft Delete**: Recoverable deletions for critical records (projects, norms, requirements).
+- **Enhanced Monitoring**: Dashboard health indicators for Database, AI, Backups, and Field activity.
+
+### Fixed
+- **RLS Security**: Hardened Row Level Security policies for production environments.
+- **Norm Library RLS**: Fixed permissions for file uploads and metadata editing.
+
 ## [0.5.1] - 2026-01-31 - "Team Collaboration & UI Polish"
 
 ### Added

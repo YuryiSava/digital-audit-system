@@ -210,6 +210,42 @@ export async function createNormSource(formData: FormData) {
     return { success: true };
 }
 
+export async function updateNormMetadata(
+    normId: string,
+    data: {
+        title: string;
+        docType: string;
+        jurisdiction: string;
+        editionDate: string;
+        publisher: string;
+        status: string;
+    }
+) {
+    const supabase = createClient();
+
+    const { error } = await supabase
+        .from('norm_sources')
+        .update({
+            title: data.title,
+            docType: data.docType,
+            jurisdiction: data.jurisdiction,
+            editionDate: data.editionDate || null,
+            publisher: data.publisher || null,
+            status: data.status,
+            updatedAt: new Date().toISOString()
+        })
+        .eq('id', normId);
+
+    if (error) {
+        console.error('Update metadata error:', error);
+        return { success: false, error: error.message };
+    }
+
+    revalidatePath(`/norm-library/${normId}`);
+    revalidatePath('/norm-library');
+    return { success: true };
+}
+
 export async function uploadFileToNorm(normId: string, formData: FormData) {
     const supabase = createClient();
     const file = formData.get('file') as File | null;

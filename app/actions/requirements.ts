@@ -36,6 +36,7 @@ export async function getRequirementSets() {
 }
 
 export async function getRequirementSetById(id: string) {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('requirement_sets')
         .select(`
@@ -59,6 +60,7 @@ export async function getRequirementSetById(id: string) {
 }
 
 export async function createRequirementSet(data: RequirementSetData) {
+    const supabase = createClient();
     const validation = RequirementSetSchema.safeParse(data);
     if (!validation.success) return { success: false, error: validation.error.format() };
 
@@ -99,6 +101,7 @@ export async function createRequirementSet(data: RequirementSetData) {
  * Publish a RequirementSet (change status from DRAFT to PUBLISHED)
  */
 export async function publishRequirementSet(id: string) {
+    const supabase = createClient();
     try {
         const { data, error } = await supabase
             .from('requirement_sets')
@@ -128,6 +131,7 @@ export async function publishRequirementSet(id: string) {
  * Publish all DRAFT RequirementSets
  */
 export async function publishAllRequirementSets() {
+    const supabase = createClient();
     try {
         const { data, error } = await supabase
             .from('requirement_sets')
@@ -169,6 +173,7 @@ const RequirementSchema = z.object({
 export type RequirementData = z.infer<typeof RequirementSchema>;
 
 export async function createRequirement(data: RequirementData) {
+    const supabase = createClient();
     const validation = RequirementSchema.safeParse(data);
     if (!validation.success) return { success: false, error: validation.error.format() };
 
@@ -205,6 +210,7 @@ export async function createRequirement(data: RequirementData) {
 // --- BATCH IMPORT ---
 
 export async function createRequirementsBatch(items: RequirementData[]) {
+    const supabase = createClient();
     if (items.length === 0) return { success: true, count: 0 };
 
     const now = new Date().toISOString();
@@ -245,6 +251,7 @@ export async function createRequirementsBatch(items: RequirementData[]) {
 
 
 export async function deleteRequirement(id: string, setId: string) {
+    const supabase = createClient();
     const { error } = await supabase
         .from('requirements')
         .delete()
@@ -272,6 +279,7 @@ export async function updateRequirement(
         notes?: string;
     }
 ) {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('requirements')
         .update({
@@ -298,6 +306,7 @@ export async function updateRequirement(
 // --- Helpers ---
 
 export async function getSystemsList() {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('systems')
         .select('id, name, systemId')
@@ -309,6 +318,7 @@ export async function getSystemsList() {
 }
 
 export async function getNormSourcesListForSelect() {
+    const supabase = createClient();
     const { data, error } = await supabase
         .from('norm_sources')
         .select('id, code, title')

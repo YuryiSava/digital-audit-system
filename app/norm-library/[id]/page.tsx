@@ -9,6 +9,7 @@ import { DeleteRequirementButton } from "./delete-requirement-button";
 import { AddRequirementButton } from "./add-requirement-button";
 import { EditRequirementButton } from "./edit-requirement-button";
 import { UniversalParseButton } from "./universal-parse-button";
+import { EditNormMetadataButton } from "./edit-metadata-button";
 import TabsView from "./TabsView";
 
 // Disable caching to show fresh data
@@ -48,7 +49,20 @@ export default async function NormDetailPage({ params }: { params: { id: string 
                     {/* Left Col: Metadata */}
                     <div className="space-y-6">
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-                            <h2 className="text-lg font-semibold text-white mb-4">Информация</h2>
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-semibold text-white">Информация</h2>
+                                <EditNormMetadataButton
+                                    normId={norm.id}
+                                    currentData={{
+                                        docType: norm.docType,
+                                        jurisdiction: norm.jurisdiction,
+                                        editionDate: norm.editionDate,
+                                        publisher: norm.publisher,
+                                        status: norm.status,
+                                        title: norm.title
+                                    }}
+                                />
+                            </div>
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-xs text-gray-400 uppercase tracking-wider">Тип</label>
