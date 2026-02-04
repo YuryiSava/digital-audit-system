@@ -221,15 +221,24 @@ export function UniversalParseButton({ normId }: { normId: string }) {
 
                             {isStuckAtStart && (
                                 <div className="bg-red-500/10 border border-red-500/30 p-3 rounded text-xs text-red-300 animate-in fade-in">
-                                    <p>Похоже, запуск затянулся. Возможно, произошла ошибка на сервере.</p>
+                                    <p>Похоже, процесс прервался или затянулся.</p>
                                     <button
                                         onClick={handleResetStatus}
-                                        className="mt-2 flex items-center gap-2 mx-auto text-white bg-red-600 px-3 py-1 rounded hover:bg-red-500"
+                                        className="mt-2 flex items-center gap-2 mx-auto text-white bg-red-600 px-3 py-1 rounded hover:bg-red-500 font-bold"
                                     >
-                                        <RefreshCw className="w-3 h-3" /> Сбросить и попробовать снова
+                                        <RefreshCw className="w-3 h-3" /> Сбросить статус и закрыть
                                     </button>
                                 </div>
                             )}
+
+                            <div className="flex justify-center gap-4 text-[10px] text-slate-500">
+                                <button onClick={handleResetStatus} className="hover:text-red-400 transition-colors">
+                                    [ Принудительный сброс ]
+                                </button>
+                                <button onClick={() => setOpen(false)} className="hover:text-white transition-colors">
+                                    [ Закрыть окно ]
+                                </button>
+                            </div>
 
                             <div className="bg-slate-950/50 rounded-lg p-3 text-[10px] text-slate-500 text-left border border-white/5">
                                 <p>• Извлечение текста (OpenAI GPT-4o-mini)</p>
