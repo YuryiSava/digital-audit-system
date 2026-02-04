@@ -204,11 +204,16 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             setIsPolling(true);
 
             // STEP 5: Batch Processing
+            const CHUNK_SIZE = 12000;
             for (let i = 0; i < totalChunks; i++) {
                 setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
                 console.log(`[PARSE] Processing batch ${i + 1}/${totalChunks}...`);
 
-                const batchRes = await processNormBatch(normId, i, totalChunks);
+                // Slice chunk client-side to save server bandwidth/time
+                const start = i * CHUNK_SIZE;
+                const chunkText = fullText.substring(start, start + CHUNK_SIZE);
+
+                const batchRes = await processNormBatch(normId, i, totalChunks, chunkText);
                 console.log(`[PARSE] Batch ${i + 1} result:`, batchRes);
 
                 if (!batchRes.success) {

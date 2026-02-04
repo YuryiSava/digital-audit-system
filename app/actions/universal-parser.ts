@@ -169,25 +169,10 @@ export async function extractNormText(normSourceId: string) {
 /**
  * STEP 2: Process a specific batch via AI
  */
-export async function processNormBatch(normSourceId: string, batchIndex: number, totalChunks: number) {
+export async function processNormBatch(normSourceId: string, batchIndex: number, totalChunks: number, chunkText: string) {
     const supabase = createClient();
     try {
-        const tempPath = `temp-text/${normSourceId}.txt`;
-
-        // 1. Download Text
-        const { data: fileData, error: downloadError } = await supabase.storage
-            .from('norm-docs')
-            .download(tempPath);
-
-        if (downloadError) throw new Error('Не удалось загрузить временный текст');
-        const fullText = await fileData.text();
-
-        // 2. Extract specific chunk
-        const CHUNK_SIZE = 12000;
-        const start = batchIndex * CHUNK_SIZE;
-        const chunk = fullText.substring(start, start + CHUNK_SIZE);
-
-        if (!chunk) return { success: true, fragments: [] }; // Done
+        if (!chunkText) return { success: true, fragments: [] }; // Empty chunk
 
         // Update progress
         await supabase.from('norm_sources').update({
@@ -195,7 +180,7 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
             updatedAt: new Date().toISOString()
         }).eq('id', normSourceId);
 
-        // 3. AI Extraction Logic (Minimal version of the script logic)
+        // AI Extraction Logic
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 
@@ -207,7 +192,7 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
                 model: "gpt-4o-mini",
                 messages: [
                     { role: "system", content: "You are an expert technical parser. Extract ONLY Russian normative fragments. Output strictly JSON: {\"fragments\": []}" },
-                    { role: "user", content: `Extract fragments from block ${batchIndex + 1}:\n\n${chunk}` }
+                    { role: "user", content: `Extract fragments from block ${batchIndex + 1}:\n\n${chunkText}` }
                 ],
                 response_format: { type: "json_object" },
                 temperature: 0.1
@@ -246,8 +231,7 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
                 updatedAt: new Date().toISOString()
             }).eq('id', normSourceId);
 
-            // Cleanup temp file
-            await supabase.storage.from('norm-docs').remove([tempPath]);
+            // Cleanup is handled by background job or ignored (it's temp)
         }
 
         return { success: true, count: fragments.length };
