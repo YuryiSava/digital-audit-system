@@ -66,50 +66,9 @@ export async function extractNormText(normSourceId: string) {
             updatedAt: new Date().toISOString()
         }).eq('id', normSourceId);
 
-        // 1. Get File Info
-        const { data: files } = await supabase.from('norm_files').select('*').eq('normSourceId', normSourceId).limit(1);
-        if (!files || files.length === 0) throw new Error('PDF-файл не найден');
-
-        const storageUrl = files[0].storageUrl;
-
-        // 2. Download PDF
-        const response = await fetch(storageUrl);
-        if (!response.ok) throw new Error('Не удалось скачать файл из хранилища');
-        const pdfBuffer = Buffer.from(await response.arrayBuffer());
-
-        // 3. Extract Text
-        const pdf = (await import('pdf-parse')).default;
-        const pdfData = await pdf(pdfBuffer);
-        const fullText = pdfData.text;
-
-        if (!fullText || fullText.length < 100) throw new Error('В PDF не найден текстовый слой');
-
-        // 4. Save to Storage (Temp)
-        const { data: buckets } = await supabase.storage.listBuckets();
-        if (!buckets?.find((b: any) => b.name === 'norm-docs')) {
-            await supabase.storage.createBucket('norm-docs', { public: true });
-        }
-
-        const tempPath = `temp-text/${normSourceId}.txt`;
-        const { error: uploadError } = await supabase.storage
-            .from('norm-docs')
-            .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
-
-        if (uploadError) throw new Error(`Ошибка сохранения текста: ${uploadError.message}`);
-
-        // Calculate chunks
-        const CHUNK_SIZE = 12000;
-        const chunkCount = Math.ceil(fullText.length / CHUNK_SIZE);
-
-        await supabase.from('norm_sources').update({
-            parsing_details: `Текст извлечен. Всего блоков: ${chunkCount}`,
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
-
         return {
-            success: true,
-            chunkCount,
-            charCount: fullText.length
+            success: false,
+            error: 'Server-side extraction is deprecated. Use client-side extraction instead.'
         };
 
     } catch (err: any) {
