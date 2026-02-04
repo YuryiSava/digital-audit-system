@@ -406,8 +406,8 @@ Example:
                 const https = require('https');
                 const http = require('http');
 
-                if (metaParams.normSourceId) {
-                    await supabase.from('norm_sources').update({ parsing_details: 'Скачивание PDF из облака...' }).eq('id', metaParams.normSourceId);
+                if (normSourceId) {
+                    await supabase.from('norm_sources').update({ parsing_details: 'Скачивание PDF из облака...' }).eq('id', normSourceId);
                 }
                 const protocol = storageUrl.startsWith('https') ? https : http;
                 const pdfBuffer = await new Promise((resolve, reject) => {
@@ -442,9 +442,9 @@ Example:
                     });
                 });
 
-                // Save temporarily
-                const tmpPath = path.join(process.cwd(), 'tmp');
-                await fs.mkdir(tmpPath, { recursive: true });
+                // Save temporarily - use /tmp for Vercel support
+                const os = require('os');
+                const tmpPath = os.tmpdir();
                 pdfPath = path.join(tmpPath, `${normSourceId}.pdf`);
                 await fs.writeFile(pdfPath, pdfBuffer);
 
@@ -536,9 +536,22 @@ Example:
 
     } catch (error) {
         console.error('\n❌ CRITICAL ERROR:', error);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
+
+        // Update DB with error if possible
+        if (normSourceId) {
+            try {
+                await supabase
+                    .from('norm_sources')
+                    .update({
+                        status: 'DRAFT',
+                        parsing_details: `Ошибка: ${error.message || 'Критический сбой процесса'}`,
+                        updatedAt: new Date().toISOString()
+                    })
+                    .eq('id', normSourceId);
+            } catch (dbErr) {
+                console.error('   ❌ Could not save error to DB:', dbErr.message);
+            }
+        }
         process.exit(1);
     }
 }

@@ -3,9 +3,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
-import { mkdir } from 'fs/promises';
+import { getCurrentUser } from './team';
 
 // Схема валидации
 const NormSourceSchema = z.object({
@@ -13,6 +11,7 @@ const NormSourceSchema = z.object({
     docType: z.string().min(1, "Тип документа обязателен"),
     code: z.string().min(1, "Шифр/Номер обязателен"),
     title: z.string().min(1, "Название обязательно"),
+    category: z.string().optional().nullable(),
     publisher: z.string().optional(),
     editionDate: z.string().optional().nullable(),
     status: z.enum(['DRAFT', 'ACTIVE', 'SUPERSEDED']).default('DRAFT'),
@@ -51,8 +50,12 @@ export async function getNormSources(filters?: {
     const supabase = createClient();
     let query = supabase
         .from('norm_sources')
-        .select('*')
-        .order('updatedAt', { ascending: false });
+        .select(`
+            *,
+            requirements:requirements(count),
+            fragments:raw_norm_fragments(count)
+        `)
+        .order('code', { ascending: true });
 
     if (filters?.jurisdiction) {
         query = query.eq('jurisdiction', filters.jurisdiction);
@@ -131,6 +134,7 @@ export async function createNormSource(formData: FormData) {
         docType: formData.get('docType'),
         code: formData.get('code'),
         title: formData.get('title'),
+        category: formData.get('category'),
         publisher: formData.get('publisher'),
         editionDate: formData.get('editionDate'),
         status: formData.get('status') || 'DRAFT',
@@ -173,17 +177,37 @@ export async function createNormSource(formData: FormData) {
 
     if (file && file.size > 0) {
         try {
-            const bytes = await file.arrayBuffer();
-            const buffer = Buffer.from(bytes);
-            const uploadDir = join(process.cwd(), 'public', 'uploads', 'norms');
-            await mkdir(uploadDir, { recursive: true });
+            // --- AUTO-BUCKET CREATION ---
+            const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+            const supabaseAdmin = createAdminClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!,
+                { auth: { autoRefreshToken: false, persistSession: false } }
+            );
+            const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+            if (!buckets?.find(b => b.name === 'norm-docs')) {
+                await supabaseAdmin.storage.createBucket('norm-docs', { public: true });
+            }
+            // ----------------------------
 
+            const buffer = await file.arrayBuffer();
             const safeName = transliterateFilename(file.name);
             const uniqueFileName = `${Date.now()}-${safeName}`;
-            const filePath = join(uploadDir, uniqueFileName);
+            const storagePath = `${uniqueFileName}`;
 
-            await writeFile(filePath, buffer);
-            const fileUrl = `/uploads/norms/${uniqueFileName}`;
+            // Perform upload with Admin Client to bypass RLS
+            const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+                .from('norm-docs')
+                .upload(storagePath, buffer, {
+                    contentType: file.type || 'application/pdf',
+                    upsert: true
+                });
+
+            if (uploadError) throw new Error(uploadError.message);
+
+            const { data: { publicUrl } } = supabaseAdmin.storage
+                .from('norm-docs')
+                .getPublicUrl(storagePath);
 
             await supabase
                 .from('norm_files')
@@ -195,14 +219,15 @@ export async function createNormSource(formData: FormData) {
                         fileType: file.name.split('.').pop() || 'unknown',
                         fileSize: file.size,
                         fileHash: 'pending',
-                        storageUrl: fileUrl,
+                        storageUrl: publicUrl,
                         accessLevel: 'INTERNAL',
                         uploadedAt: now
                     }
                 ]);
 
-        } catch (uploadErr) {
+        } catch (uploadErr: any) {
             console.error('File upload failed:', uploadErr);
+            // Non-blocking but logged
         }
     }
 
@@ -216,6 +241,7 @@ export async function updateNormMetadata(
         title: string;
         docType: string;
         jurisdiction: string;
+        category?: string;
         editionDate: string;
         publisher: string;
         status: string;
@@ -229,6 +255,7 @@ export async function updateNormMetadata(
             title: data.title,
             docType: data.docType,
             jurisdiction: data.jurisdiction,
+            category: data.category || null,
             editionDate: data.editionDate || null,
             publisher: data.publisher || null,
             status: data.status,
@@ -255,17 +282,42 @@ export async function uploadFileToNorm(normId: string, formData: FormData) {
     }
 
     try {
-        const uploadDir = join(process.cwd(), 'public', 'uploads', 'norms');
-        await mkdir(uploadDir, { recursive: true });
+        // --- AUTO-BUCKET CREATION ---
+        const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        );
+        const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+        if (!buckets?.find(b => b.name === 'norm-docs')) {
+            console.log('Bucket "norm-docs" not found, creating...');
+            await supabaseAdmin.storage.createBucket('norm-docs', { public: true });
+        }
+        // ----------------------------
 
-        const buffer = Buffer.from(await file.arrayBuffer());
+        const buffer = await file.arrayBuffer();
         const safeName = transliterateFilename(file.name);
         const uniqueFileName = `${Date.now()}-${safeName}`;
-        const filePath = join(uploadDir, uniqueFileName);
+        const storagePath = `${uniqueFileName}`;
 
-        await writeFile(filePath, buffer);
+        // Perform upload with Admin Client to bypass RLS
+        const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+            .from('norm-docs')
+            .upload(storagePath, buffer, {
+                contentType: file.type || 'application/pdf',
+                upsert: true
+            });
 
-        const fileUrl = `/uploads/norms/${uniqueFileName}`;
+        if (uploadError) {
+            console.error('Supabase Storage error (Admin):', uploadError);
+            return { success: false, error: `Storage error: ${uploadError.message}` };
+        }
+
+        const { data: { publicUrl } } = supabaseAdmin.storage
+            .from('norm-docs')
+            .getPublicUrl(uniqueFileName);
+
         const now = new Date().toISOString();
 
         const { error: fileError } = await supabase
@@ -278,7 +330,7 @@ export async function uploadFileToNorm(normId: string, formData: FormData) {
                     fileType: file.name.split('.').pop() || 'unknown',
                     fileSize: file.size,
                     fileHash: 'pending',
-                    storageUrl: fileUrl,
+                    storageUrl: publicUrl,
                     accessLevel: 'INTERNAL',
                     uploadedAt: now
                 }
@@ -395,14 +447,29 @@ export async function deleteNormFile(fileId: string, normId: string) {
             return { success: false, error: 'File not found' };
         }
 
-        try {
-            const relativePath = fileRecord.storageUrl;
-            const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-            const absolutePath = join(process.cwd(), 'public', cleanPath);
-            const fs = require('fs/promises');
-            await fs.unlink(absolutePath);
-        } catch (filesErr) {
-            console.warn(`Could not delete file from disk: ${filesErr}`);
+        // Try to delete from Supabase Storage first
+        if (fileRecord.storageUrl?.includes('supabase')) {
+            const pathMatch = fileRecord.storageUrl.match(/norm-docs\/(.+)/);
+            if (pathMatch) {
+                await supabase.storage
+                    .from('norm-docs')
+                    .remove([pathMatch[1]]);
+            }
+        } else {
+            // Legacy local file delete
+            try {
+                const relativePath = fileRecord.storageUrl;
+                const cleanPath = relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+                // Only try to delete from disk if not on Vercel
+                if (process.env.VERCEL !== '1') {
+                    const { join } = require('path');
+                    const absolutePath = join(process.cwd(), 'public', cleanPath);
+                    const fs = require('fs/promises');
+                    await fs.unlink(absolutePath);
+                }
+            } catch (filesErr) {
+                console.warn(`Could not delete file from disk: ${filesErr}`);
+            }
         }
 
         const { error: deleteError } = await supabase

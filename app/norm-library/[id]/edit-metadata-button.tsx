@@ -9,6 +9,7 @@ interface EditNormMetadataButtonProps {
     currentData: {
         docType: string;
         jurisdiction: string;
+        category: string | null;
         editionDate: string | null;
         publisher: string | null;
         status: string;
@@ -22,6 +23,7 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
     const [formData, setFormData] = useState({
         docType: currentData.docType,
         jurisdiction: currentData.jurisdiction,
+        category: currentData.category || 'Общее',
         editionDate: currentData.editionDate || '',
         publisher: currentData.publisher || '',
         status: currentData.status,
@@ -92,6 +94,23 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
                                     <option value="KZ">Казахстан (KZ)</option>
                                     <option value="RU">Россия (RU)</option>
                                     <option value="INT">Международные (INT)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Раздел системы</label>
+                                <select
+                                    value={formData.category}
+                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-white"
+                                >
+                                    <option value="Общее">Общее</option>
+                                    <option value="Пожарная безопасность">Пожарная безопасность</option>
+                                    <option value="ОВИК">ОВИК (Отопление, вентиляция)</option>
+                                    <option value="ВК">ВК (Водопровод, канализация)</option>
+                                    <option value="Электротехника">Электротехника</option>
+                                    <option value="Конструктив">Конструктив</option>
+                                    <option value="Архитектура">Архитектура</option>
                                 </select>
                             </div>
 

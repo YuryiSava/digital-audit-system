@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.4] - 2026-02-04 - "Executive Summary Reporting"
+
+### Added
+- **Executive Summary Report (AI)**: New project-level report that aggregates findings from all audit checklists. Designed for management to see the "Big Picture" status of a large object.
+- **Reporting Engine**: Added `generateExecutiveSummary` server action with specialized managerial prompt.
+
+### Improved
+- **UI Consistency**: Refactored `EditProfileDialog` and `ExecutiveSummaryDialog` to use a native modal implementation matching the DAS design system.
+
+## [0.7.3] - 2026-02-04 - "UX Stabilization & Team Management"
+
+### Fixed
+- **Dashboard Location**: Fixed visibility of project addresses in the recent activity feed (switched from `location` to `address` field).
+- **System Health Monitor**: Updated Backup status to "Cloud Managed" to correctly reflect Supabase's automatic backup infrastructure.
+
+### Added
+- **Team Management**: Implemented member profile editing. Administrators can now update user names/full names directly from the Team page.
+- **Strategic Roadmap**: Categorized all planned features into "Fast Fixes" and "Strategic Roadmap" in `FUTURE_IMPROVEMENTS.md`.
+
 ## [0.6.0] - 2026-02-02 - "Offline Phase 1 & Scaling Strategy"
 
 ### Added

@@ -60,3 +60,19 @@ export async function getCurrentUser() {
 
     return { ...user, profile }
 }
+export async function updateUserProfile(userId: string, updates: { full_name?: string }) {
+    const supabase = createClient()
+
+    const { error } = await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', userId)
+
+    if (error) {
+        console.error('Error updating profile:', error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath('/team')
+    return { success: true }
+}

@@ -16,6 +16,7 @@ export function CreateNormDialog() {
         docType: 'СН РК',
         code: '',
         title: '',
+        category: 'Общее',
         publisher: '',
         editionDate: '',
     });
@@ -33,6 +34,7 @@ export function CreateNormDialog() {
             data.append('docType', formData.docType);
             data.append('code', formData.code);
             data.append('title', formData.title);
+            data.append('category', formData.category);
             data.append('publisher', formData.publisher);
             data.append('editionDate', formData.editionDate);
             data.append('status', 'DRAFT');
@@ -50,6 +52,7 @@ export function CreateNormDialog() {
                     docType: 'СН РК',
                     code: '',
                     title: '',
+                    category: 'Общее',
                     publisher: '',
                     editionDate: '',
                 });
@@ -137,6 +140,23 @@ export function CreateNormDialog() {
                                 placeholder="Пожарная автоматика зданий и сооружений"
                                 required
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Раздел / Категория</Label>
+                            <select
+                                className="w-full flex h-10 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={formData.category}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                            >
+                                <option value="Общее">Общее</option>
+                                <option value="Пожарная безопасность">Пожарная безопасность</option>
+                                <option value="ОВИК">ОВИК (Отопление, вентиляция)</option>
+                                <option value="ВК">ВК (Водопровод, канализация)</option>
+                                <option value="Электротехника">Электротехника</option>
+                                <option value="Конструктив">Конструктив</option>
+                                <option value="Архитектура">Архитектура</option>
+                            </select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

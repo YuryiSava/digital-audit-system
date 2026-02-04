@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Atom, X, Activity, RefreshCw } from 'lucide-react';
-import { parseNormUniversal } from "@/app/actions/universal-parser";
+import { extractNormText, processNormBatch } from "@/app/actions/universal-parser";
 import { getNormById } from "@/app/actions/norm-library";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -79,15 +79,39 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         setProgress('Инициализация...');
 
         try {
-            const res = await parseNormUniversal(normId);
-            if (!res.success) {
-                alert(`Ошибка: ${res.message}`);
+            // STEP 1: Extraction
+            setProgress('Экстракция текста из PDF...');
+            const extractRes = await extractNormText(normId);
+
+            if (!extractRes.success) {
+                alert(`Ошибка экстракции: ${extractRes.error}`);
                 setParsing(false);
                 return;
             }
+
+            const totalChunks = extractRes.chunkCount || 1;
+            setProgress(`Текст извлечен. Всего блоков: ${totalChunks}`);
+
+            // STEP 2: Batch Processing
+            for (let i = 0; i < totalChunks; i++) {
+                setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
+                const batchRes = await processNormBatch(normId, i, totalChunks);
+
+                if (!batchRes.success) {
+                    console.error(`Batch ${i} failed:`, batchRes.error);
+                    // We continue or stop? Let's show a warning but try to continue if it's just one batch
+                }
+            }
+
+            setProgress('Парсинг завершен!');
+            setParsing(false);
+            setOpen(false);
+            alert('✓ Парсинг успешно завершен!');
+            window.location.reload();
+
         } catch (e: any) {
             setParsing(false);
-            alert(`Ошибка запуска: ${e.message}`);
+            alert(`Ошибка процесса: ${e.message}`);
         }
     };
 

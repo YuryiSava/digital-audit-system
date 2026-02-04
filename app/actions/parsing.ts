@@ -33,18 +33,27 @@ export async function parseNormFile(normId: string, targetSystemId?: string) {
 
         if (!files || files.length === 0) return { success: false, error: 'К нормативу не прикреплен PDF файл' };
 
-        // 3. Извлекаем текст (используем комбинированный метод)
+        // 3. Извлекаем текст
         let fullText = '';
         const fileRecord = files[0];
-        const cleanPath = fileRecord.storageUrl.startsWith('/') ? fileRecord.storageUrl.substring(1) : fileRecord.storageUrl;
-        const absolutePath = path.join(process.cwd(), 'public', cleanPath);
 
         try {
-            const dataBuffer = await fs.readFile(absolutePath);
+            let dataBuffer: Buffer;
+            if (fileRecord.storageUrl.startsWith('http')) {
+                // Fetch from Supabase Storage / URL
+                const response = await fetch(fileRecord.storageUrl);
+                if (!response.ok) throw new Error(`Failed to fetch file from storage: ${response.statusText}`);
+                dataBuffer = Buffer.from(await response.arrayBuffer());
+            } else {
+                // Traditional local file (backward compatibility)
+                const cleanPath = fileRecord.storageUrl.startsWith('/') ? fileRecord.storageUrl.substring(1) : fileRecord.storageUrl;
+                const absolutePath = path.join(process.cwd(), 'public', cleanPath);
+                dataBuffer = await fs.readFile(absolutePath);
+            }
             fullText = await extractPdfText(dataBuffer);
         } catch (err: any) {
             console.error(`[AI-Parser] Text extraction failed: ${err.message}`);
-            return { success: false, error: 'Не удалось прочитать текст из PDF' };
+            return { success: false, error: `Не удалось прочитать текст из PDF: ${err.message}` };
         }
 
         if (!fullText || fullText.length < 100) return { success: false, error: 'Текст в PDF слишком короткий или не распознан' };

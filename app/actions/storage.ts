@@ -7,24 +7,39 @@ export async function uploadEvidence(file: File | Blob, path: string) {
 
     // Convert Blob to ArrayBuffer if necessary
     const buffer = await file.arrayBuffer();
-    const fileName = path.split('/').pop() || `${Date.now()}.jpg`;
+    // --- UPLOAD WITH ADMIN CLIENT ---
+    let uploadResult;
+    try {
+        const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { auth: { autoRefreshToken: false, persistSession: false } }
+        );
 
-    const { data, error } = await supabase.storage
-        .from('audit-evidence')
-        .upload(path, buffer, {
-            contentType: 'image/jpeg',
-            upsert: true
-        });
+        // Ensure bucket exists
+        const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+        if (!buckets?.find(b => b.name === 'audit-evidence')) {
+            await supabaseAdmin.storage.createBucket('audit-evidence', { public: true });
+        }
 
-    if (error) {
-        console.error('Storage upload error:', error);
+        const { data, error } = await supabaseAdmin.storage
+            .from('audit-evidence')
+            .upload(path, buffer, {
+                contentType: 'image/jpeg',
+                upsert: true
+            });
+
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabaseAdmin.storage
+            .from('audit-evidence')
+            .getPublicUrl(path);
+
+        return { success: true, publicUrl };
+
+    } catch (error: any) {
+        console.error('Storage upload error (Admin):', error);
         return { success: false, error: error.message };
     }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-        .from('audit-evidence')
-        .getPublicUrl(path);
-
-    return { success: true, publicUrl };
 }

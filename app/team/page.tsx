@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Users, Shield, User, Mail, Calendar, Settings2 } from "lucide-react";
 import { getTeamMembers, getCurrentUser } from "@/app/actions/team";
 import { RoleSelector } from "@/components/team/role-selector";
+import { EditProfileDialog } from "@/components/team/edit-profile-dialog";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -107,9 +108,7 @@ export default async function TeamPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <button className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-lg transition-all">
-                                                    <Settings2 className="h-5 w-5" />
-                                                </button>
+                                                <EditProfileDialog member={member} />
                                             </td>
                                         </tr>
                                     ))

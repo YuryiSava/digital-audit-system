@@ -138,7 +138,7 @@ export default async function DashboardPage() {
                                     <div>
                                         <h3 className="font-semibold text-white group-hover:text-blue-400 transition-colors">{project.name}</h3>
                                         <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-                                            <span>{project.location || 'Локация не указана'}</span>
+                                            <span>{project.address || 'Локация не указана'}</span>
                                             <span>•</span>
                                             <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
                                         </div>

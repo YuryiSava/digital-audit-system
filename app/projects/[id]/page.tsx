@@ -5,6 +5,7 @@ import { getProjectChecklists } from "@/app/actions/audit";
 import { AddChecklistDialog } from "@/components/audit/add-checklist-dialog";
 import { DeleteChecklistButton } from "@/components/audit/delete-checklist-button";
 import { ProjectTeam } from "@/components/projects/teams/project-team";
+import { ExecutiveSummaryDialog } from "@/components/projects/reports/executive-summary-dialog";
 import { formatDate } from "@/lib/utils";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
@@ -57,6 +58,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                 }`}>
                                 {project.status === 'PLANNING' ? 'Планирование' : project.status}
                             </span>
+                            <ExecutiveSummaryDialog
+                                projectId={params.id}
+                                projectName={project.name}
+                            />
                         </div>
                     </div>
                 </div>

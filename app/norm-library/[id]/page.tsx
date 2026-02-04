@@ -59,7 +59,8 @@ export default async function NormDetailPage({ params }: { params: { id: string 
                                         editionDate: norm.editionDate,
                                         publisher: norm.publisher,
                                         status: norm.status,
-                                        title: norm.title
+                                        title: norm.title,
+                                        category: norm.category
                                     }}
                                 />
                             </div>
@@ -67,6 +68,10 @@ export default async function NormDetailPage({ params }: { params: { id: string 
                                 <div>
                                     <label className="text-xs text-gray-400 uppercase tracking-wider">Тип</label>
                                     <p className="text-white font-medium">{norm.docType} ({norm.jurisdiction})</p>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-400 uppercase tracking-wider">Раздел</label>
+                                    <p className="text-white font-medium">{norm.category || 'Без раздела'}</p>
                                 </div>
                                 <div>
                                     <label className="text-xs text-gray-400 uppercase tracking-wider">Дата редакции</label>
