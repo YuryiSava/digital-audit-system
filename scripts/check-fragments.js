@@ -1,78 +1,65 @@
-#!/usr/bin/env node
 /**
- * Проверка фрагментов в базе данных
+ * Скрипт для проверки наличия фрагментов после парсинга
+ * Использование: node scripts/check-fragments.js <norm_source_id>
  */
 
 require('dotenv').config({ path: '.env.local' });
-require('dotenv').config({ path: '.env' });
-
 const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const normSourceId = process.argv[2] || 'a339a46c-33f5-4945-abc0-bee817ec15c7';
 
-async function checkFragments() {
-    console.log('\n🔍 Checking raw_norm_fragments table...\n');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Get all fragments
-    const { data: fragments, error } = await supabase
-        .from('raw_norm_fragments')
-        .select('*')
-        .order('createdAt', { ascending: false });
-
-    if (error) {
-        console.error('❌ Error:', error.message);
-        return;
-    }
-
-    console.log(`📊 Total fragments in database: ${fragments.length}\n`);
-
-    if (fragments.length === 0) {
-        console.log('⚠️  No fragments found in database!');
-        console.log('\nPossible reasons:');
-        console.log('1. Parser failed to save to database');
-        console.log('2. Wrong database connection');
-        console.log('3. Table does not exist\n');
-        return;
-    }
-
-    // Group by normSourceId
-    const byNorm = {};
-    fragments.forEach(f => {
-        if (!byNorm[f.normSourceId]) {
-            byNorm[f.normSourceId] = [];
-        }
-        byNorm[f.normSourceId].push(f);
-    });
-
-    console.log('📋 Fragments by norm:\n');
-    for (const [normId, frags] of Object.entries(byNorm)) {
-        console.log(`  ${normId}: ${frags.length} fragments`);
-        console.log(`    Status breakdown:`);
-
-        const statuses = {};
-        frags.forEach(f => {
-            statuses[f.status] = (statuses[f.status] || 0) + 1;
-        });
-
-        for (const [status, count] of Object.entries(statuses)) {
-            console.log(`      ${status}: ${count}`);
-        }
-        console.log('');
-    }
-
-    // Show last 5 fragments
-    console.log('📄 Last 5 fragments:\n');
-    fragments.slice(0, 5).forEach((f, i) => {
-        console.log(`${i + 1}. ${f.fragmentId}`);
-        console.log(`   Norm: ${f.normSourceId}`);
-        console.log(`   Clause: ${f.sourceClause || 'N/A'}`);
-        console.log(`   Status: ${f.status}`);
-        console.log(`   Text: ${f.rawText.substring(0, 100)}...`);
-        console.log('');
-    });
+if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ Не найдены переменные окружения');
+    process.exit(1);
 }
 
-checkFragments().catch(console.error);
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function checkFragments() {
+    console.log(`🔍 Проверка фрагментов для документа: ${normSourceId}...\n`);
+
+    // 1. Проверяем статус документа
+    const { data: norm, error: normError } = await supabase
+        .from('norm_sources')
+        .select('title, code, status, parsing_details')
+        .eq('id', normSourceId)
+        .single();
+
+    if (normError) {
+        console.error('❌ Ошибка получения документа:', normError.message);
+        return;
+    }
+
+    console.log(`📄 Документ: ${norm.title || norm.code || normSourceId}`);
+    console.log(`📊 Статус: ${norm.status}`);
+    console.log(`📝 Детали: ${norm.parsing_details || 'нет'}\n`);
+
+    // 2. Проверяем фрагменты
+    const { data: fragments, error: fragError, count } = await supabase
+        .from('raw_norm_fragments')
+        .select('*', { count: 'exact' })
+        .eq('normSourceId', normSourceId);
+
+    if (fragError) {
+        console.error('❌ Ошибка получения фрагментов:', fragError.message);
+        return;
+    }
+
+    console.log(`✅ Найдено фрагментов: ${count || 0}`);
+
+    if (fragments && fragments.length > 0) {
+        console.log('\n📋 Первые 3 фрагмента:');
+        fragments.slice(0, 3).forEach((f, i) => {
+            console.log(`\n${i + 1}. ${f.sourceSection || 'без раздела'} - ${f.sourceClause || 'без пункта'}`);
+            console.log(`   Текст: ${f.rawText?.substring(0, 100)}...`);
+        });
+    } else {
+        console.log('\n⚠️  Фрагменты не найдены!');
+        console.log('Возможно, парсинг завершился с ошибкой или не до конца.');
+    }
+}
+
+checkFragments();

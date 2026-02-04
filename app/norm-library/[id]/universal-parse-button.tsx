@@ -99,6 +99,7 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         setIsStuckAtStart(false);
         setParsing(true);
         setProgress('Инициализация...');
+        console.log('[PARSE] Starting parsing process...');
 
         // Watchdog for extraction phase
         const watchdog = setTimeout(() => {
@@ -108,38 +109,72 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         try {
             // STEP 1: Get Signed URL (No CORS/Public issues)
             setProgress('Получение прав доступа к файлу...');
-            const { url: pdfUrl, success: urlSuccess, error: urlError } = await getSignedReadUrl(normId);
-            if (!urlSuccess || !pdfUrl) throw new Error(urlError || 'Не удалось получить ссылку на файл');
+            console.log('[PARSE] Step 1: Getting signed URL for', normId);
+
+            const urlResult = await getSignedReadUrl(normId);
+            console.log('[PARSE] Signed URL result:', urlResult);
+
+            if (!urlResult.success || !urlResult.url) {
+                throw new Error(urlResult.error || 'Не удалось получить ссылку на файл');
+            }
+
+            const pdfUrl = urlResult.url;
+            console.log('[PARSE] PDF URL obtained:', pdfUrl.substring(0, 100) + '...');
 
             // STEP 2: Client-side Extraction
             setProgress('Извлечение текста из PDF (в браузере)...');
+            console.log('[PARSE] Step 2: Starting client-side PDF extraction...');
+
             const fullText = await extractTextFromPdf(pdfUrl);
-            if (!fullText || fullText.length < 100) throw new Error('Текст не извлечен или слишком короткий');
+            console.log('[PARSE] Extraction complete. Text length:', fullText.length);
+
+            if (!fullText || fullText.length < 100) {
+                throw new Error('Текст не извлечен или слишком короткий');
+            }
 
             // STEP 3: Direct Upload to Supabase Storage (Bypass Vercel Payload Limit)
             setProgress('Загрузка текста в облако (напрямую)...');
+            console.log('[PARSE] Step 3: Uploading text to Supabase Storage...');
+
             const tempPath = `temp-text/${normId}.txt`;
             const { error: uploadError } = await supabase.storage
                 .from('norm-docs')
                 .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
 
-            if (uploadError) throw new Error(`Ошибка загрузки: ${uploadError.message}`);
+            if (uploadError) {
+                console.error('[PARSE] Upload error:', uploadError);
+                throw new Error(`Ошибка загрузки: ${uploadError.message}`);
+            }
+            console.log('[PARSE] Text uploaded successfully to', tempPath);
 
             // STEP 4: Notify Server & Get Chunk Count
+            console.log('[PARSE] Step 4: Notifying server...');
             const notifyRes = await notifyTextReady(normId, fullText.length);
-            if (!notifyRes.success) throw new Error(notifyRes.error);
+            console.log('[PARSE] Notify result:', notifyRes);
+
+            if (!notifyRes.success) {
+                throw new Error(notifyRes.error);
+            }
 
             const totalChunks = notifyRes.chunkCount || 1;
             setProgress(`Текст готов. Всего блоков: ${totalChunks}`);
+            console.log('[PARSE] Total chunks to process:', totalChunks);
 
             // STEP 5: Batch Processing
             for (let i = 0; i < totalChunks; i++) {
                 setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
+                console.log(`[PARSE] Processing batch ${i + 1}/${totalChunks}...`);
+
                 const batchRes = await processNormBatch(normId, i, totalChunks);
-                if (!batchRes.success) throw new Error(`Ошибка блока ${i + 1}: ${batchRes.error}`);
+                console.log(`[PARSE] Batch ${i + 1} result:`, batchRes);
+
+                if (!batchRes.success) {
+                    throw new Error(`Ошибка блока ${i + 1}: ${batchRes.error}`);
+                }
             }
 
             clearTimeout(watchdog);
+            console.log('[PARSE] ✓ Parsing completed successfully!');
             setProgress('Парсинг завершен!');
             setParsing(false);
             setOpen(false);
@@ -149,7 +184,8 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         } catch (e: any) {
             clearTimeout(watchdog);
             setParsing(false);
-            console.error('Parse error:', e);
+            console.error('[PARSE] ❌ Error:', e);
+            console.error('[PARSE] Error stack:', e.stack);
             alert(`Ошибка процесса: ${e.message}`);
         }
     };
