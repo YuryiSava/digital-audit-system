@@ -86,129 +86,52 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         setIsStuckAtStart(false);
         setParsing(true);
         setProgress('Инициализация...');
-        console.log('[PARSE] Starting parsing process...');
+        console.log('[PARSE] Starting parsing process (Server Logic)...');
 
-        // Watchdog for extraction phase
+        // Watchdog
         const watchdog = setTimeout(() => {
             setIsStuckAtStart(true);
-        }, 60000); // 1 min for extraction
+        }, 120000); // 2 mins for server extraction
 
         try {
-            // STEP 1: Get Signed URL (No CORS/Public issues)
-            setProgress('Получение прав доступа к файлу...');
-            console.log('[PARSE] Step 1: Getting signed URL for', normId);
+            // STEP 1: Server-Side Extraction
+            setProgress('Запуск серверного извлечения...');
+            console.log('[PARSE] Requesting server-side extraction for', normId);
 
-            const urlResult = await getSignedReadUrl(normId);
-            console.log('[PARSE] Signed URL result:', urlResult);
+            // Dynamic import to ensure we get the action
+            const { extractNormText } = await import("@/app/actions/universal-parser");
+            const extractRes = await extractNormText(normId);
 
-            if (!urlResult.success || !urlResult.url) {
-                throw new Error(urlResult.error || 'Не удалось получить ссылку на файл');
+            if (!extractRes.success) {
+                throw new Error(extractRes.error);
             }
 
-            const pdfUrl = urlResult.url;
-            console.log('[PARSE] PDF URL obtained:', pdfUrl.substring(0, 100) + '...');
+            const totalChunks = extractRes.chunkCount || 10;
+            console.log(`[PARSE] Server reported ${totalChunks} chunks.`);
 
-            // STEP 2: Client-side Extraction
-            setProgress('Извлечение текста из PDF (в браузере)...');
-            console.log('[PARSE] Step 2: Starting client-side PDF extraction...');
-
-            const fullText = await extractTextFromPdf(pdfUrl);
-            console.log('[PARSE] Extraction complete. Text length:', fullText.length);
-
-            if (!fullText || fullText.length < 100) {
-                throw new Error('Текст не извлечен или слишком короткий');
-            }
-
-            // STEP 3: Direct Upload to Supabase Storage (Bypass Vercel Payload Limit)
-            setProgress('Загрузка текста в облако (напрямую)...');
-            console.log('[PARSE] Step 3: Uploading text to Supabase Storage...');
-
-            // Use Signed Upload URL to bypass RLS
-            const { getSignedUploadUrl } = await import("@/app/actions/universal-parser");
-            const uploadAuth = await getSignedUploadUrl(normId);
-
-            if (!uploadAuth.success || !uploadAuth.data) {
-                throw new Error(`Не удалось получить доступ для загрузки: ${uploadAuth.error}`);
-            }
-
-            const { path, token } = uploadAuth.data;
-            const tempPath = path; // `temp-text/${normId}.txt`
-
-            const { error: uploadError } = await supabase.storage
-                .from('norm-docs')
-                .uploadToSignedUrl(path, token, fullText, {
-                    contentType: 'text/plain',
-                    upsert: true
-                });
-
-            if (uploadError) {
-                console.error('[PARSE] Upload error:', uploadError);
-                throw new Error(`Ошибка загрузки: ${uploadError.message}`);
-            }
-            console.log('[PARSE] Text uploaded successfully to', tempPath);
-
-            // STEP 4: Notify Server & Get Chunk Count
-            console.log('[PARSE] Step 4: Notifying server...');
-            const notifyRes = await notifyTextReady(normId, fullText.length);
-            console.log('[PARSE] Notify result:', notifyRes);
-
-            if (!notifyRes.success) {
-                throw new Error(notifyRes.error);
-            }
-
-            const totalChunks = notifyRes.chunkCount || 1;
-            setProgress(`Текст готов. Всего блоков: ${totalChunks}`);
-            console.log('[PARSE] Total chunks to process:', totalChunks);
-
-            // ENABLE POLLING NOW because DB status should be 'PARSING'
+            // ENABLE POLLING
             setIsPolling(true);
 
-            // STEP 5: Batch Processing with Retries
-            const CHUNK_SIZE = 6000; // Reduced from 12000 for better stability
-            const realTotalChunks = Math.ceil(fullText.length / CHUNK_SIZE);
+            // STEP 2: Loop chunks
+            // We pass NULL as text, because server already has the file in temp-text/
+            for (let i = 0; i < totalChunks; i++) {
+                setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
 
-            console.log(`[PARSE] Recalculated chunks: ${realTotalChunks} (size: ${CHUNK_SIZE})`);
-
-            for (let i = 0; i < realTotalChunks; i++) {
-                setProgress(`Обработка блока ${i + 1} из ${realTotalChunks}...`);
-                console.log(`[PARSE] Processing batch ${i + 1}/${realTotalChunks}...`);
-
-                const start = i * CHUNK_SIZE;
-                const chunkText = fullText.substring(start, start + CHUNK_SIZE);
-
-                // Retry logic (3 attempts)
                 let attempts = 0;
                 let success = false;
-                let lastError;
 
                 while (attempts < 3 && !success) {
+                    attempts++;
                     try {
-                        attempts++;
-                        if (attempts > 1) {
-                            console.log(`[PARSE] Retry attempt ${attempts} for batch ${i + 1}...`);
-                            setProgress(`Обработка блока ${i + 1} (попытка ${attempts})...`);
-                            await new Promise(r => setTimeout(r, 1000 * attempts)); // Backoff
-                        }
-
-                        const batchRes = await processNormBatch(normId, i, realTotalChunks, chunkText);
-
-                        if (!batchRes.success) {
-                            throw new Error(batchRes.error);
-                        }
-
-                        console.log(`[PARSE] Batch ${i + 1} success`);
-                        success = true;
-
-                    } catch (err: any) {
-                        console.error(`[PARSE] Batch ${i + 1} attempt ${attempts} failed:`, err);
-                        lastError = err;
-                        // Continue to next attempt
+                        // Pass null for chunkText -> triggers server-side slice
+                        const batchRes = await processNormBatch(normId, i, totalChunks, null as any);
+                        if (batchRes.success) success = true;
+                        else throw new Error(batchRes.error);
+                    } catch (e) {
+                        console.error(`Batch ${i + 1} attempt ${attempts} failed`);
+                        if (attempts === 3) throw e;
+                        await new Promise(r => setTimeout(r, 1000 * attempts));
                     }
-                }
-
-                if (!success) {
-                    console.error(`[PARSE] Failed to process batch ${i + 1} after 3 attempts`);
-                    throw new Error(`Ошибка обработки блока ${i + 1}: ${lastError?.message || 'Unknown error'}`);
                 }
             }
 
@@ -224,7 +147,6 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             clearTimeout(watchdog);
             setParsing(false);
             console.error('[PARSE] ❌ Error:', e);
-            console.error('[PARSE] Error stack:', e.stack);
             alert(`Ошибка процесса: ${e.message}`);
         }
     };
