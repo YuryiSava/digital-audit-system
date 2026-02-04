@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCurrentUser } from './team';
+import crypto from 'crypto';
 
 // Схема валидации
 const NormSourceSchema = z.object({
