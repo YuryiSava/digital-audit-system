@@ -20,6 +20,9 @@ export function UniversalParseButton({ normId }: { normId: string }) {
                 setParsing(true);
                 setProgress(res.data.parsing_details || 'Восстановление сессии...');
                 setOpen(true);
+                // Also trigger stuck detection if it was already parsing
+                const timer = setTimeout(() => setIsStuckAtStart(true), 8000);
+                return () => clearTimeout(timer);
             }
         }
         checkInitialStatus();
@@ -78,12 +81,18 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         setParsing(true);
         setProgress('Инициализация...');
 
+        // Watchdog: If stuck at extraction for > 20s
+        const watchdog = setTimeout(() => {
+            setIsStuckAtStart(true);
+        }, 20000);
+
         try {
             // STEP 1: Extraction
             setProgress('Экстракция текста из PDF...');
             const extractRes = await extractNormText(normId);
 
             if (!extractRes.success) {
+                clearTimeout(watchdog);
                 alert(`Ошибка экстракции: ${extractRes.error}`);
                 setParsing(false);
                 return;
@@ -99,10 +108,10 @@ export function UniversalParseButton({ normId }: { normId: string }) {
 
                 if (!batchRes.success) {
                     console.error(`Batch ${i} failed:`, batchRes.error);
-                    // We continue or stop? Let's show a warning but try to continue if it's just one batch
                 }
             }
 
+            clearTimeout(watchdog);
             setProgress('Парсинг завершен!');
             setParsing(false);
             setOpen(false);
@@ -110,6 +119,7 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             window.location.reload();
 
         } catch (e: any) {
+            clearTimeout(watchdog);
             setParsing(false);
             alert(`Ошибка процесса: ${e.message}`);
         }
