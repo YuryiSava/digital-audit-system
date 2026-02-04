@@ -187,6 +187,9 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             setProgress(`Текст готов. Всего блоков: ${totalChunks}`);
             console.log('[PARSE] Total chunks to process:', totalChunks);
 
+            // ENABLE POLLING NOW because DB status should be 'PARSING'
+            setIsPolling(true);
+
             // STEP 5: Batch Processing
             for (let i = 0; i < totalChunks; i++) {
                 setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
