@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 export function UniversalParseButton({ normId }: { normId: string }) {
     const [open, setOpen] = useState(false);
     const [parsing, setParsing] = useState(false);
+    const [isPolling, setIsPolling] = useState(false); // New state to prevent premature finishing
     const [progress, setProgress] = useState<string>('');
     const [isStuckAtStart, setIsStuckAtStart] = useState(false);
 
@@ -18,9 +19,10 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             const res = await getNormById(normId);
             if (res.success && res.data && res.data.status === 'PARSING') {
                 setParsing(true);
+                setIsPolling(true); // Enable polling immediately if resuming
                 setProgress(res.data.parsing_details || 'Восстановление сессии...');
                 setOpen(true);
-                // Also trigger stuck detection if it was already parsing
+
                 const timer = setTimeout(() => setIsStuckAtStart(true), 8000);
                 return () => clearTimeout(timer);
             }
@@ -32,7 +34,8 @@ export function UniversalParseButton({ normId }: { normId: string }) {
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
-        if (parsing && open) {
+        // Only poll if parsing AND polling is enabled
+        if (parsing && open && isPolling) {
             // Immediate check
             const checkStatus = async () => {
                 const { data: norm } = await supabase
@@ -50,13 +53,14 @@ export function UniversalParseButton({ normId }: { normId: string }) {
                     } else {
                         // Finished or failed
                         setParsing(false);
+                        setIsPolling(false);
                         setOpen(false);
 
                         // Check if there was an error
                         if (norm.parsing_details && norm.parsing_details.includes('Ошибка')) {
                             alert('❌ ' + norm.parsing_details);
                         } else {
-                            alert('✓ Парсинг завершен!');
+                            alert('✓ Парсинг завершен! (по данным сервера)');
                         }
 
                         window.location.reload();
@@ -74,7 +78,7 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [parsing, normId, open, supabase]);
+    }, [parsing, open, isPolling, normId, supabase]);
 
     const extractTextFromPdf = async (url: string) => {
         try {
