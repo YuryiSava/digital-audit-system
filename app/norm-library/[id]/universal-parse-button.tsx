@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Atom, X, Activity, RefreshCw } from 'lucide-react';
-import { getSignedReadUrl, notifyTextReady, processNormBatch } from "@/app/actions/universal-parser";
+import { runFullParsing } from "@/app/actions/universal-parser";
 import { getNormById } from "@/app/actions/norm-library";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -80,74 +80,33 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         };
     }, [parsing, open, isPolling, normId, supabase]);
 
-    // Client-side extraction removed - trusting server-side (v2.0 logic)
-
     const handleParse = async () => {
         setIsStuckAtStart(false);
-        setParsing(true);
-        setProgress('Инициализация...');
-        console.log('[PARSE] Starting parsing process (Server Logic)...');
-
-        // Watchdog
-        const watchdog = setTimeout(() => {
-            setIsStuckAtStart(true);
-        }, 120000); // 2 mins for server extraction
+        setParsing(true); // Shows the modal with spinner
+        setProgress('Запуск полного цикла (v2.0 Script Revert)...');
 
         try {
-            // STEP 1: Server-Side Extraction
-            setProgress('Запуск серверного извлечения...');
-            console.log('[PARSE] Requesting server-side extraction for', normId);
-
-            // Dynamic import to ensure we get the action
-            const { extractNormText } = await import("@/app/actions/universal-parser");
-            const extractRes = await extractNormText(normId);
-
-            if (!extractRes.success) {
-                throw new Error(extractRes.error);
-            }
-
-            const totalChunks = extractRes.chunkCount || 10;
-            console.log(`[PARSE] Server reported ${totalChunks} chunks.`);
-
-            // ENABLE POLLING
+            console.log('[PARSE] Calling Monolithic Server Action...');
+            // Enable polling ensures we see "parsing_details" updates from the DB
             setIsPolling(true);
 
-            // STEP 2: Loop chunks
-            // We pass NULL as text, because server already has the file in temp-text/
-            for (let i = 0; i < totalChunks; i++) {
-                setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
+            // This is the SINGLE call that does everything (Download -> Extract -> Chunk -> AI -> Save)
+            // It mimics the original Node.js script exactly.
+            const result = await runFullParsing(normId);
 
-                let attempts = 0;
-                let success = false;
-
-                while (attempts < 3 && !success) {
-                    attempts++;
-                    try {
-                        // Pass null for chunkText -> triggers server-side slice
-                        const batchRes = await processNormBatch(normId, i, totalChunks, null as any);
-                        if (batchRes.success) success = true;
-                        else throw new Error(batchRes.error);
-                    } catch (e) {
-                        console.error(`Batch ${i + 1} attempt ${attempts} failed`);
-                        if (attempts === 3) throw e;
-                        await new Promise(r => setTimeout(r, 1000 * attempts));
-                    }
-                }
+            if (!result.success) {
+                throw new Error(result.error);
             }
 
-            clearTimeout(watchdog);
-            console.log('[PARSE] ✓ Parsing completed successfully!');
-            setProgress('Парсинг завершен!');
-            setParsing(false);
-            setOpen(false);
-            alert('✓ Парсинг успешно завершен!');
+            setProgress('Готово!');
+            alert(`✓ Парсинг завершен успешно!\nВсего фрагментов: ${result.count}`);
             window.location.reload();
 
         } catch (e: any) {
-            clearTimeout(watchdog);
-            setParsing(false);
             console.error('[PARSE] ❌ Error:', e);
-            alert(`Ошибка процесса: ${e.message}`);
+            alert(`Ошибка: ${e.message}`);
+            // Keep modal open so user can see error
+            setParsing(false);
         }
     };
 
