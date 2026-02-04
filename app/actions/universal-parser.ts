@@ -171,12 +171,22 @@ export async function extractNormText(normSourceId: string) {
             const res = await fetch(storageUrl);
             const arrayBuffer = await res.arrayBuffer();
             pdfBuffer = Buffer.from(arrayBuffer);
-        } else {
+        } else if (storageUrl.includes('norm-docs/')) {
             // Assume internal storage path, try to download via admin client
             const path = storageUrl.split('norm-docs/')[1];
             const { data, error } = await supabase.storage.from('norm-docs').download(path);
             if (error) throw error;
             pdfBuffer = Buffer.from(await data.arrayBuffer());
+        } else {
+            // ASSUME LOCAL PATH (For Dev Environment / Seeded Data)
+            // e.g. "D:\digital-audit-system\test\data\..."
+            console.log('[EXTRACT] Detected local file path, attempting to read:', storageUrl);
+            const fs = require('fs');
+            if (fs.existsSync(storageUrl)) {
+                pdfBuffer = fs.readFileSync(storageUrl);
+            } else {
+                throw new Error(`File not found (Storage or Local): ${storageUrl}`);
+            }
         }
 
         // 3. Extract Text
