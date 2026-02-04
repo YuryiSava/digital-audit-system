@@ -203,21 +203,52 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             // ENABLE POLLING NOW because DB status should be 'PARSING'
             setIsPolling(true);
 
-            // STEP 5: Batch Processing
-            const CHUNK_SIZE = 12000;
-            for (let i = 0; i < totalChunks; i++) {
-                setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
-                console.log(`[PARSE] Processing batch ${i + 1}/${totalChunks}...`);
+            // STEP 5: Batch Processing with Retries
+            const CHUNK_SIZE = 6000; // Reduced from 12000 for better stability
+            const realTotalChunks = Math.ceil(fullText.length / CHUNK_SIZE);
 
-                // Slice chunk client-side to save server bandwidth/time
+            console.log(`[PARSE] Recalculated chunks: ${realTotalChunks} (size: ${CHUNK_SIZE})`);
+
+            for (let i = 0; i < realTotalChunks; i++) {
+                setProgress(`Обработка блока ${i + 1} из ${realTotalChunks}...`);
+                console.log(`[PARSE] Processing batch ${i + 1}/${realTotalChunks}...`);
+
                 const start = i * CHUNK_SIZE;
                 const chunkText = fullText.substring(start, start + CHUNK_SIZE);
 
-                const batchRes = await processNormBatch(normId, i, totalChunks, chunkText);
-                console.log(`[PARSE] Batch ${i + 1} result:`, batchRes);
+                // Retry logic (3 attempts)
+                let attempts = 0;
+                let success = false;
+                let lastError;
 
-                if (!batchRes.success) {
-                    throw new Error(`Ошибка блока ${i + 1}: ${batchRes.error}`);
+                while (attempts < 3 && !success) {
+                    try {
+                        attempts++;
+                        if (attempts > 1) {
+                            console.log(`[PARSE] Retry attempt ${attempts} for batch ${i + 1}...`);
+                            setProgress(`Обработка блока ${i + 1} (попытка ${attempts})...`);
+                            await new Promise(r => setTimeout(r, 1000 * attempts)); // Backoff
+                        }
+
+                        const batchRes = await processNormBatch(normId, i, realTotalChunks, chunkText);
+
+                        if (!batchRes.success) {
+                            throw new Error(batchRes.error);
+                        }
+
+                        console.log(`[PARSE] Batch ${i + 1} success`);
+                        success = true;
+
+                    } catch (err: any) {
+                        console.error(`[PARSE] Batch ${i + 1} attempt ${attempts} failed:`, err);
+                        lastError = err;
+                        // Continue to next attempt
+                    }
+                }
+
+                if (!success) {
+                    console.error(`[PARSE] Failed to process batch ${i + 1} after 3 attempts`);
+                    throw new Error(`Ошибка обработки блока ${i + 1}: ${lastError?.message || 'Unknown error'}`);
                 }
             }
 
