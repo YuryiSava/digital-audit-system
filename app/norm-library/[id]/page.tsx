@@ -47,7 +47,7 @@ export default async function NormDetailPage({ params }: { params: { id: string 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* Left Col: Metadata */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto"  >
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-white">Информация</h2>
