@@ -11,13 +11,12 @@ export async function getSignedReadUrl(normSourceId: string) {
     try {
         console.log('[SERVER] getSignedReadUrl called for:', normSourceId);
 
+        // 1. Check strict permissions via standard client (RLS)
         const { data: files, error: filesError } = await supabase
             .from('norm_files')
             .select('storageUrl')
             .eq('normSourceId', normSourceId)
             .limit(1);
-
-        console.log('[SERVER] Query result - files:', files, 'error:', filesError);
 
         if (filesError) {
             console.error('[SERVER] Database error:', filesError);
@@ -32,21 +31,38 @@ export async function getSignedReadUrl(normSourceId: string) {
         const storageUrl = files[0].storageUrl;
         console.log('[SERVER] Storage URL:', storageUrl);
 
+        // 2. Check if it's already a PUBLIC URL
+        if (storageUrl.includes('/public/')) {
+            console.log('[SERVER] Public URL detected, returning as-is');
+            return { success: true, url: storageUrl };
+        }
+
+        // 3. Extract path
         const pathMatch = storageUrl.match(/norm-docs\/(.+)/);
         if (!pathMatch) {
-            console.log('[SERVER] Public URL detected, returning as-is');
-            return { success: true, url: storageUrl }; // Public URL already
+            console.log('[SERVER] Could not extract path from URL, returning as-is');
+            return { success: true, url: storageUrl };
         }
 
         const filePath = pathMatch[1];
         console.log('[SERVER] Creating signed URL for path:', filePath);
 
-        const { data, error } = await supabase.storage
+        // 4. Use Service Role client for signing (Bypass Storage RLS)
+        // This is safe because we verified access to the record in step 1
+        const adminClient = createClientWithServiceRole();
+
+        const { data, error } = await adminClient.storage
             .from('norm-docs')
             .createSignedUrl(filePath, 600); // 10 mins
 
         if (error) {
             console.error('[SERVER] Signed URL error:', error);
+            // Fallback: return authorized URL if signing fails (might be public but not detected)
+            if (error.message.includes('Object not found')) {
+                console.log('[SERVER] Object not found via API, trying direct public URL check...');
+                // If we can't sign it, maybe we can just read it? 
+                // But for now let's throw detailed error
+            }
             throw error;
         }
 
@@ -56,6 +72,20 @@ export async function getSignedReadUrl(normSourceId: string) {
         console.error('[SERVER] Exception in getSignedReadUrl:', err);
         return { success: false, error: err.message || 'Unknown error' };
     }
+}
+
+// Helper for admin client
+function createClientWithServiceRole() {
+    return createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    );
 }
 
 /**
