@@ -9,21 +9,52 @@ import crypto from 'crypto';
 export async function getSignedReadUrl(normSourceId: string) {
     const supabase = createClient();
     try {
-        const { data: files } = await supabase.from('norm_files').select('storageUrl').eq('normSourceId', normSourceId).limit(1);
-        if (!files || files.length === 0) throw new Error('PDF-файл не найден');
+        console.log('[SERVER] getSignedReadUrl called for:', normSourceId);
+
+        const { data: files, error: filesError } = await supabase
+            .from('norm_files')
+            .select('storageUrl')
+            .eq('normSourceId', normSourceId)
+            .limit(1);
+
+        console.log('[SERVER] Query result - files:', files, 'error:', filesError);
+
+        if (filesError) {
+            console.error('[SERVER] Database error:', filesError);
+            throw new Error(`Database error: ${filesError.message}`);
+        }
+
+        if (!files || files.length === 0) {
+            console.error('[SERVER] No files found for normSourceId:', normSourceId);
+            throw new Error('PDF-файл не найден');
+        }
 
         const storageUrl = files[0].storageUrl;
+        console.log('[SERVER] Storage URL:', storageUrl);
+
         const pathMatch = storageUrl.match(/norm-docs\/(.+)/);
-        if (!pathMatch) return { success: true, url: storageUrl }; // Public URL already
+        if (!pathMatch) {
+            console.log('[SERVER] Public URL detected, returning as-is');
+            return { success: true, url: storageUrl }; // Public URL already
+        }
+
+        const filePath = pathMatch[1];
+        console.log('[SERVER] Creating signed URL for path:', filePath);
 
         const { data, error } = await supabase.storage
             .from('norm-docs')
-            .createSignedUrl(pathMatch[1], 600); // 10 mins
+            .createSignedUrl(filePath, 600); // 10 mins
 
-        if (error) throw error;
+        if (error) {
+            console.error('[SERVER] Signed URL error:', error);
+            throw error;
+        }
+
+        console.log('[SERVER] Signed URL created successfully');
         return { success: true, url: data.signedUrl };
     } catch (err: any) {
-        return { success: false, error: err.message };
+        console.error('[SERVER] Exception in getSignedReadUrl:', err);
+        return { success: false, error: err.message || 'Unknown error' };
     }
 }
 
