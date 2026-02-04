@@ -2,239 +2,13 @@
 
 import { createClient } from '@/utils/supabase/server';
 import crypto from 'crypto';
+import type { Database } from '@/types/supabase';
 
-/**
- * STEP -1: Generate Signed URL for Client-Side Extraction
- */
-export async function getSignedReadUrl(normSourceId: string) {
-    const supabase = createClient();
-    try {
-        console.log('[SERVER] getSignedReadUrl called for:', normSourceId);
+// ============================================================================
+// UNIVERSAL META-PROMPT (SYSTEM) - PURE COPY FROM parse-pdf-universal.js
+// ============================================================================
 
-        // 1. Check strict permissions via standard client (RLS)
-        const { data: files, error: filesError } = await supabase
-            .from('norm_files')
-            .select('storageUrl')
-            .eq('normSourceId', normSourceId)
-            .limit(1);
-
-        if (filesError) {
-            console.error('[SERVER] Database error:', filesError);
-            throw new Error(`Database error: ${filesError.message}`);
-        }
-
-        if (!files || files.length === 0) {
-            console.error('[SERVER] No files found for normSourceId:', normSourceId);
-            throw new Error('PDF-файл не найден');
-        }
-
-        const storageUrl = files[0].storageUrl;
-        console.log('[SERVER] Storage URL:', storageUrl);
-
-        // 2. Check if it's already a PUBLIC URL
-        if (storageUrl.includes('/public/')) {
-            console.log('[SERVER] Public URL detected, returning as-is');
-            return { success: true, url: storageUrl };
-        }
-
-        // 3. Extract path
-        const pathMatch = storageUrl.match(/norm-docs\/(.+)/);
-        if (!pathMatch) {
-            console.log('[SERVER] Could not extract path from URL, returning as-is');
-            return { success: true, url: storageUrl };
-        }
-
-        const filePath = pathMatch[1];
-        console.log('[SERVER] Creating signed URL for path:', filePath);
-
-        // 4. Use Service Role client for signing (Bypass Storage RLS)
-        // This is safe because we verified access to the record in step 1
-        const adminClient = createClientWithServiceRole();
-
-        const { data, error } = await adminClient.storage
-            .from('norm-docs')
-            .createSignedUrl(filePath, 600); // 10 mins
-
-        if (error) {
-            console.error('[SERVER] Signed URL error:', error);
-            // Fallback: return authorized URL if signing fails (might be public but not detected)
-            if (error.message.includes('Object not found')) {
-                console.log('[SERVER] Object not found via API, trying direct public URL check...');
-                // If we can't sign it, maybe we can just read it? 
-                // But for now let's throw detailed error
-            }
-            throw error;
-        }
-
-        console.log('[SERVER] Signed URL created successfully');
-        return { success: true, url: data.signedUrl };
-    } catch (err: any) {
-        console.error('[SERVER] Exception in getSignedReadUrl:', err);
-        return { success: false, error: err.message || 'Unknown error' };
-    }
-}
-
-// Helper for admin client
-function createClientWithServiceRole() {
-    const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
-    return createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
-            }
-        }
-    );
-}
-
-/**
- * STEP 2.5: Generate Signed URL for Uploading Text (Bypass RLS)
- */
-export async function getSignedUploadUrl(normSourceId: string) {
-    try {
-        console.log('[SERVER] getSignedUploadUrl called for:', normSourceId);
-        const adminClient = createClientWithServiceRole();
-        const path = `temp-text/${normSourceId}.txt`;
-
-        // Always try to remove the file first to avoid "Resource already exists" error on retries
-        await adminClient.storage.from('norm-docs').remove([path]);
-
-        const { data, error } = await adminClient.storage
-            .from('norm-docs')
-            .createSignedUploadUrl(path);
-
-        if (error) {
-            console.error('[SERVER] Failed to create signed upload URL:', error);
-            throw error;
-        }
-
-        console.log('[SERVER] Signed upload URL created');
-        return { success: true, data: data };
-    } catch (err: any) {
-        console.error('[SERVER] Exception in getSignedUploadUrl:', err);
-        return { success: false, error: err.message };
-    }
-}
-
-/**
- * STEP 0: notify server that text is ready in storage
- */
-export async function notifyTextReady(normSourceId: string, charCount: number) {
-    const supabase = createClient();
-    try {
-        const CHUNK_SIZE = 12000;
-        const chunkCount = Math.ceil(charCount / CHUNK_SIZE);
-
-        await supabase.from('norm_sources').update({
-            parsing_details: `Текст готов (в облаке). Всего блоков: ${chunkCount}`,
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
-
-        return { success: true, chunkCount };
-    } catch (err: any) {
-        return { success: false, error: err.message };
-    }
-}
-
-/**
- * STEP 1: Extract Text and Save to Storage
- */
-export async function extractNormText(normSourceId: string) {
-    const supabase = createClientWithServiceRole(); // Use Admin for RLS bypass
-    try {
-        console.log(`[EXTRACT] Starting extraction for ${normSourceId}`);
-        const pdf = require('pdf-parse');
-
-        // Update status
-        await supabase.from('norm_sources').update({
-            status: 'PARSING',
-            parsing_details: 'Скачивание PDF (Server Side)...',
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
-
-        // 1. Get File URL
-        const { data: files } = await supabase
-            .from('norm_files')
-            .select('storageUrl')
-            .eq('normSourceId', normSourceId)
-            .limit(1);
-
-        if (!files || !files.length) throw new Error('Файл не найден');
-
-        // 2. Download File
-        const storageUrl = files[0].storageUrl;
-        let pdfBuffer;
-
-        if (storageUrl.startsWith('http')) {
-            const res = await fetch(storageUrl);
-            const arrayBuffer = await res.arrayBuffer();
-            pdfBuffer = Buffer.from(arrayBuffer);
-        } else if (storageUrl.includes('norm-docs/')) {
-            // Assume internal storage path, try to download via admin client
-            const path = storageUrl.split('norm-docs/')[1];
-            const { data, error } = await supabase.storage.from('norm-docs').download(path);
-            if (error) throw error;
-            pdfBuffer = Buffer.from(await data.arrayBuffer());
-        } else {
-            // ASSUME LOCAL PATH (For Dev Environment / Seeded Data)
-            // e.g. "D:\digital-audit-system\test\data\..."
-            console.log('[EXTRACT] Detected local file path, attempting to read:', storageUrl);
-            const fs = require('fs');
-            if (fs.existsSync(storageUrl)) {
-                pdfBuffer = fs.readFileSync(storageUrl);
-            } else {
-                throw new Error(`File not found (Storage or Local): ${storageUrl}`);
-            }
-        }
-
-        // 3. Extract Text
-        await supabase.from('norm_sources').update({ parsing_details: 'Извлечение текста (PDF Parse)...' }).eq('id', normSourceId);
-        const data = await pdf(pdfBuffer);
-        const text = data.text;
-
-        if (!text || text.length < 100) throw new Error('Пустой текст после извлечения');
-
-        // 4. Save to Temp Storage
-        const tempPath = `temp-text/${normSourceId}.txt`;
-        await supabase.storage.from('norm-docs').upload(tempPath, text, { upsert: true, contentType: 'text/plain' });
-
-        return { success: true, chunkCount: Math.ceil(text.length / 12000) };
-
-    } catch (err: any) {
-        console.error('[EXTRACT] Error:', err);
-        return { success: false, error: err.message };
-    }
-}
-
-/**
- * STEP 2: Process a specific batch via AI
- */
-export async function processNormBatch(normSourceId: string, batchIndex: number, totalChunks: number, chunkText: string) {
-    const supabase = createClient();
-    try {
-        if (!chunkText) {
-            console.log(`[BATCH ${batchIndex}] Empty chunk text`);
-            return { success: true, fragments: [] };
-        }
-
-        console.log(`[BATCH ${batchIndex}] Processing chunk length: ${chunkText.length}`);
-
-        // Update progress
-        await supabase.from('norm_sources').update({
-            parsing_details: `Обработка блока ${batchIndex + 1} из ${totalChunks}...`,
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
-
-        // AI Extraction Logic
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
-
-        // ============================================================================
-        // UNIVERSAL META-PROMPT (SYSTEM) - RESTORED FROM parse-pdf-universal.js
-        // ============================================================================
-        const SYSTEM_PROMPT = `
+const SYSTEM_PROMPT = `
 Ты — специализированный AI-парсер нормативных и технических документов.
 
 Твоя задача — извлекать RAW-ФРАГМЕНТЫ НОРМ (RawNormFragments),
@@ -259,7 +33,7 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
 Если фрагмент (или колонка таблицы) на казахском — ПРОПУСКАЙ ЕГО.
 `;
 
-        const EXTRACTION_CRITERIA = `
+const EXTRACTION_CRITERIA = `
 ## КРИТЕРИИ ИЗВЛЕЧЕНИЯ ФРАГМЕНТОВ
 
 ### 1️⃣ МОДАЛЬНОСТЬ (явная или скрытая)
@@ -294,7 +68,7 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
 * подпункты
 `;
 
-        const OUTPUT_FORMAT = `
+const OUTPUT_FORMAT = `
 ## ФОРМАТ ВЫХОДНЫХ ДАННЫХ
 
 Верни ТОЛЬКО ВАЛИДНЫЙ JSON массив объектов. Каждый объект - отдельный фрагмент:
@@ -328,57 +102,149 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
 Если фрагмент сомнительный — извлекай с низким confidence_score (< 0.7).
 `;
 
-        // Reuse prompts from parse-pdf-universal.js logic
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: SYSTEM_PROMPT + '\n' + EXTRACTION_CRITERIA + '\n' + OUTPUT_FORMAT },
-                    { role: "user", content: `## ТЕКСТ (БЛОК ${batchIndex + 1})\n${chunkText}\n\n🚨 ПРАВИЛО: Извлекай ТОЛЬКО русский текст. Если всё на казахском — верни пустой массив.\nВерни ТОЛЬКО валидный JSON: {"raw_norm_fragments": [...]}` }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.1
-            })
-        });
+// ============================================================================
+// MONOLITHIC PARSING FUNCTION (SERVER ACTION)
+// ============================================================================
 
-        if (!response.ok) throw new Error(`AI API error: ${response.status}`);
-        const result = await response.json();
-        console.log(`[BATCH ${batchIndex}] AI Raw Response:`, result.choices[0]?.message?.content?.substring(0, 200));
+export async function runFullParsing(normSourceId: string) {
+    console.log(`\n🔍 UNIVERSAL PARSER: Starting full process for ${normSourceId}`);
+    const supabase = createClientWithServiceRole();
+    const apiKey = process.env.OPENAI_API_KEY;
 
-        const content = result.choices[0]?.message?.content || '[]';
-        let data;
-        try {
-            data = JSON.parse(content);
-        } catch (e) {
-            console.error(`[BATCH ${batchIndex}] JSON Parse Error:`, e);
-            return { success: false, error: 'JSON Parse Error' };
+    try {
+        if (!apiKey) throw new Error('OPENAI_API_KEY is missing');
+
+        // 1. Get Norm & File URL
+        const { data: norm, error: normError } = await supabase
+            .from('norm_sources')
+            .select('*')
+            .eq('id', normSourceId)
+            .single();
+
+        if (normError || !norm) throw new Error('Norm not found');
+
+        await supabase.from('norm_sources').update({
+            status: 'PARSING',
+            parsing_details: 'Поиск файла...',
+            updatedAt: new Date().toISOString()
+        }).eq('id', normSourceId);
+
+        const { data: files } = await supabase
+            .from('norm_files')
+            .select('storageUrl')
+            .eq('normSourceId', normSourceId)
+            .limit(1);
+
+        if (!files || !files.length) throw new Error('File record not found');
+        const storageUrl = files[0].storageUrl;
+
+        // 2. Download File (HTTP or Local or Storage)
+        let pdfBuffer: Buffer;
+        await supabase.from('norm_sources').update({ parsing_details: 'Скачивание файла...' }).eq('id', normSourceId);
+
+        if (storageUrl.startsWith('http')) {
+            // Public/External URL
+            const res = await fetch(storageUrl);
+            const arrayBuffer = await res.arrayBuffer();
+            pdfBuffer = Buffer.from(arrayBuffer);
+        } else if (storageUrl.includes('norm-docs/')) {
+            // Internal Storage Path
+            const path = storageUrl.split('norm-docs/')[1];
+            const { data, error } = await supabase.storage.from('norm-docs').download(path);
+            if (error) throw error;
+            pdfBuffer = Buffer.from(await data.arrayBuffer());
+        } else {
+            // Local File Path (Dev Mode)
+            const fs = require('fs');
+            // Try explicit path first, then relative to cwd
+            if (fs.existsSync(storageUrl)) {
+                pdfBuffer = fs.readFileSync(storageUrl);
+            } else {
+                throw new Error(`Local file not found: ${storageUrl}`);
+            }
         }
 
-        // Robust extraction (handling both Array and Object formats)
-        // AI often returns 'fragments' even if we ask for 'raw_norm_fragments'
-        let fragments: any[] = [];
+        // 3. Extract Text via PDF-Parse
+        await supabase.from('norm_sources').update({ parsing_details: 'Извлечение текста (PDF)...' }).eq('id', normSourceId);
+        const pdf = require('pdf-parse');
+        const pdfData = await pdf(pdfBuffer);
+        const fullText = pdfData.text;
 
-        if (Array.isArray(data)) {
-            fragments = data;
-        } else if (data.fragments && Array.isArray(data.fragments)) {
-            fragments = data.fragments;
-        } else if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) {
-            fragments = data.raw_norm_fragments;
+        if (!fullText || fullText.length < 50) throw new Error('Текст PDF пуст или не извлечен');
+        console.log(`   ✅ Extracted ${fullText.length} chars`);
+
+        // 4. Chunking
+        const CHUNK_SIZE = 12000;
+        const chunks = [];
+        for (let i = 0; i < fullText.length; i += CHUNK_SIZE) {
+            chunks.push(fullText.substring(i, i + CHUNK_SIZE));
+        }
+        console.log(`   📦 Split into ${chunks.length} chunks`);
+
+        // 5. AI Loop (Parallel Batches of 3)
+        const BATCH_SIZE = 3;
+        let allFragments: any[] = [];
+        let fragmentCounter = 1;
+
+        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const currentBatch = chunks.slice(i, i + BATCH_SIZE);
+            const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
+
+            const msg = `Обработка AI: батч ${batchIndex}/${totalBatches}`;
+            console.log(`   [Batch ${batchIndex}] Processing...`);
+            await supabase.from('norm_sources').update({ parsing_details: msg }).eq('id', normSourceId);
+
+            const batchPromises = currentBatch.map(async (chunk, idx) => {
+                const chunkNum = i + idx + 1;
+                try {
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({
+                            model: "gpt-4o-mini",
+                            messages: [
+                                { role: "system", content: SYSTEM_PROMPT + '\n' + EXTRACTION_CRITERIA + '\n' + OUTPUT_FORMAT },
+                                { role: "user", content: `## ТЕКСТ (БЛОК ${chunkNum})\n${chunk}\n\n🚨 ПРАВИЛО: Извлекай ТОЛЬКО русский текст.\nВерни JSON массив.` }
+                            ], // Using slightly simplified user prompt but FULL system prompt
+                            response_format: { type: "json_object" },
+                            temperature: 0.1
+                        })
+                    });
+
+                    if (!response.ok) return [];
+                    const result = await response.json();
+                    const content = result.choices[0]?.message?.content;
+                    if (!content) return [];
+
+                    const data = JSON.parse(content);
+                    // Robust extraction logic from my last fix
+                    if (Array.isArray(data)) return data;
+                    if (data.fragments && Array.isArray(data.fragments)) return data.fragments;
+                    if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) return data.raw_norm_fragments;
+                    return [];
+
+                } catch (e) {
+                    console.error(`Error in chunk ${chunkNum}`, e);
+                    return [];
+                }
+            });
+
+            const results = await Promise.all(batchPromises);
+            results.flat().forEach(frag => {
+                frag.fragment_id = `${normSourceId.substring(0, 8)}-${String(fragmentCounter).padStart(5, '0')}`;
+                allFragments.push(frag);
+                fragmentCounter++;
+            });
         }
 
-        console.log(`[BATCH ${batchIndex}] Extracted ${fragments.length} fragments`);
-
-        if (fragments.length > 0) {
-            console.log(`[BATCH ${batchIndex}] Sample:`, JSON.stringify(fragments[0]).substring(0, 100));
-        }
-
-        // 4. Save to DB
-        if (fragments.length > 0) {
-            const records = fragments.map((f: any) => ({
+        // 6. Save to DB
+        console.log(`   💾 Saving ${allFragments.length} fragments...`);
+        if (allFragments.length > 0) {
+            const records = allFragments.map((f: any) => ({
                 id: crypto.randomUUID(),
                 normSourceId,
+                fragmentId: f.fragment_id,
                 sourceSection: f.source_section || null,
                 sourceClause: f.source_clause || null,
                 rawText: f.raw_text,
@@ -387,32 +253,52 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
                 detectedParameters: f.detected_parameters || null,
                 predictedRequirementType: f.predicted_requirement_type || null,
                 confidenceScore: f.confidence_score || 0.8,
-                status: 'PENDING'
+                status: 'PENDING',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }));
 
-            await supabase.from('raw_norm_fragments').insert(records);
+            // Batch insert
+            const DB_BATCH = 50;
+            for (let i = 0; i < records.length; i += DB_BATCH) {
+                const batch = records.slice(i, i + DB_BATCH);
+                await supabase.from('raw_norm_fragments').insert(batch);
+            }
         }
 
-        // Final check
-        if (batchIndex + 1 === totalChunks) {
-            await supabase.from('norm_sources').update({
-                status: 'DRAFT',
-                parsing_details: null,
-                updatedAt: new Date().toISOString()
-            }).eq('id', normSourceId);
+        // 7. Finish
+        await supabase.from('norm_sources').update({
+            status: 'DRAFT',
+            parsing_details: null,
+            updatedAt: new Date().toISOString()
+        }).eq('id', normSourceId);
 
-            // Cleanup is handled by background job or ignored (it's temp)
-        }
-
-        return { success: true, count: fragments.length };
+        return { success: true, count: allFragments.length };
 
     } catch (err: any) {
-        console.error(`[BATCH ${batchIndex}] Error:`, err);
+        console.error('CRITICAL PARSING ERROR:', err);
+        await supabase.from('norm_sources').update({
+            status: 'DRAFT',
+            parsing_details: `Ошибка: ${err.message}`,
+            updatedAt: new Date().toISOString()
+        }).eq('id', normSourceId);
         return { success: false, error: err.message };
     }
 }
 
-export async function parseNormUniversal(normSourceId: string) {
-    // Keep legacy for compatibility but suggest using staged
-    return { success: false, message: 'Use staged parsing instead' };
+// Helpers retained
+function createClientWithServiceRole() {
+    const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
+    return createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    );
 }
+
+// Stub for exported functions to keep imports working temporarily if needed (deprecated)
+export async function getSignedReadUrl() { return { success: false } }
+export async function getSignedUploadUrl() { return { success: false } }
+export async function notifyTextReady() { return { success: false } }
+export async function extractNormText() { return { success: false } }
+export async function processNormBatch() { return { success: false } }
