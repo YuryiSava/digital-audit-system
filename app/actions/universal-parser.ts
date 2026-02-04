@@ -98,6 +98,9 @@ export async function getSignedUploadUrl(normSourceId: string) {
         const adminClient = createClientWithServiceRole();
         const path = `temp-text/${normSourceId}.txt`;
 
+        // Always try to remove the file first to avoid "Resource already exists" error on retries
+        await adminClient.storage.from('norm-docs').remove([path]);
+
         const { data, error } = await adminClient.storage
             .from('norm-docs')
             .createSignedUploadUrl(path);
