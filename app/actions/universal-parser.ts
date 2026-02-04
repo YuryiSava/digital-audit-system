@@ -90,6 +90,32 @@ function createClientWithServiceRole() {
 }
 
 /**
+ * STEP 2.5: Generate Signed URL for Uploading Text (Bypass RLS)
+ */
+export async function getSignedUploadUrl(normSourceId: string) {
+    try {
+        console.log('[SERVER] getSignedUploadUrl called for:', normSourceId);
+        const adminClient = createClientWithServiceRole();
+        const path = `temp-text/${normSourceId}.txt`;
+
+        const { data, error } = await adminClient.storage
+            .from('norm-docs')
+            .createSignedUploadUrl(path);
+
+        if (error) {
+            console.error('[SERVER] Failed to create signed upload URL:', error);
+            throw error;
+        }
+
+        console.log('[SERVER] Signed upload URL created');
+        return { success: true, data: data };
+    } catch (err: any) {
+        console.error('[SERVER] Exception in getSignedUploadUrl:', err);
+        return { success: false, error: err.message };
+    }
+}
+
+/**
  * STEP 0: notify server that text is ready in storage
  */
 export async function notifyTextReady(normSourceId: string, charCount: number) {

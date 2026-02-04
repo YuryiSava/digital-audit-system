@@ -163,10 +163,23 @@ export function UniversalParseButton({ normId }: { normId: string }) {
             setProgress('Загрузка текста в облако (напрямую)...');
             console.log('[PARSE] Step 3: Uploading text to Supabase Storage...');
 
-            const tempPath = `temp-text/${normId}.txt`;
+            // Use Signed Upload URL to bypass RLS
+            const { getSignedUploadUrl } = await import("@/app/actions/universal-parser");
+            const uploadAuth = await getSignedUploadUrl(normId);
+
+            if (!uploadAuth.success || !uploadAuth.data) {
+                throw new Error(`Не удалось получить доступ для загрузки: ${uploadAuth.error}`);
+            }
+
+            const { path, token } = uploadAuth.data;
+            const tempPath = path; // `temp-text/${normId}.txt`
+
             const { error: uploadError } = await supabase.storage
                 .from('norm-docs')
-                .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
+                .uploadToSignedUrl(path, token, fullText, {
+                    contentType: 'text/plain',
+                    upsert: true
+                });
 
             if (uploadError) {
                 console.error('[PARSE] Upload error:', uploadError);
