@@ -81,7 +81,7 @@ export default function RawFragmentsTab({ normSourceId }: { normSourceId: string
         setLoading(false);
     }
 
-    async function updateFragmentStatus(fragmentId: string, newStatus: 'APPROVED' | 'REJECTED') {
+    async function updateFragmentStatus(fragmentId: string, newStatus: 'PENDING' | 'APPROVED' | 'REJECTED') {
         setUpdating(fragmentId);
         setFragments(prev => prev.map(f =>
             f.id === fragmentId ? { ...f, status: newStatus } : f
@@ -354,6 +354,17 @@ export default function RawFragmentsTab({ normSourceId }: { normSourceId: string
                                 >
                                     <X className="h-4 w-4" />
                                     Отклонить
+                                </button>
+                            </div>
+                        )}
+
+                        {fragment.status === 'REJECTED' && (
+                            <div className="flex gap-2 pt-2 border-t border-white/10">
+                                <button
+                                    onClick={() => updateFragmentStatus(fragment.id, 'PENDING')}
+                                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded transition text-sm"
+                                >
+                                    ↩️ Восстановить в ожидание
                                 </button>
                             </div>
                         )}
