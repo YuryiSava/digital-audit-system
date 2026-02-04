@@ -4,6 +4,54 @@ import { createClient } from '@/utils/supabase/server';
 import crypto from 'crypto';
 
 /**
+ * STEP 0: Save Client-Extracted Text to Storage
+ */
+export async function saveExtractedText(normSourceId: string, fullText: string) {
+    const supabase = createClient();
+    try {
+        if (!fullText || fullText.length < 100) throw new Error('Текст документа слишком короткий или пустой');
+
+        // Update status
+        await supabase.from('norm_sources').update({
+            status: 'PARSING',
+            parsing_details: 'Сохранение извлеченного текста...',
+            updatedAt: new Date().toISOString()
+        }).eq('id', normSourceId);
+
+        // Save to Storage (Temp)
+        const { data: buckets } = await supabase.storage.listBuckets();
+        if (!buckets?.find((b: any) => b.name === 'norm-docs')) {
+            await supabase.storage.createBucket('norm-docs', { public: true });
+        }
+
+        const tempPath = `temp-text/${normSourceId}.txt`;
+        const { error: uploadError } = await supabase.storage
+            .from('norm-docs')
+            .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
+
+        if (uploadError) throw new Error(`Ошибка сохранения текста: ${uploadError.message}`);
+
+        // Calculate chunks
+        const CHUNK_SIZE = 12000;
+        const chunkCount = Math.ceil(fullText.length / CHUNK_SIZE);
+
+        await supabase.from('norm_sources').update({
+            parsing_details: `Текст готов. Всего блоков: ${chunkCount}`,
+            updatedAt: new Date().toISOString()
+        }).eq('id', normSourceId);
+
+        return {
+            success: true,
+            chunkCount,
+            charCount: fullText.length
+        };
+    } catch (err: any) {
+        console.error('[SAVE] Error:', err);
+        return { success: false, error: err.message };
+    }
+}
+
+/**
  * STEP 1: Extract Text and Save to Storage
  */
 export async function extractNormText(normSourceId: string) {

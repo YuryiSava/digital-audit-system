@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Atom, X, Activity, RefreshCw } from 'lucide-react';
-import { extractNormText, processNormBatch } from "@/app/actions/universal-parser";
+import { extractNormText, processNormBatch, saveExtractedText } from "@/app/actions/universal-parser";
 import { getNormById } from "@/app/actions/norm-library";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -76,32 +76,66 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         };
     }, [parsing, normId, open, supabase]);
 
+    const extractTextFromPdf = async (url: string) => {
+        const pdfjs = await import('pdfjs-dist');
+        // @ts-ignore
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+        const loadingTask = pdfjs.getDocument(url);
+        const pdf = await loadingTask.promise;
+        let fullText = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            setProgress(`Извлечение текста: страница ${i} из ${pdf.numPages}...`);
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(' ');
+            fullText += pageText + '\n';
+        }
+        return fullText;
+    };
+
     const handleParse = async () => {
         setIsStuckAtStart(false);
         setParsing(true);
         setProgress('Инициализация...');
 
-        // Watchdog: If stuck at extraction for > 20s
+        // Watchdog for extraction phase
         const watchdog = setTimeout(() => {
             setIsStuckAtStart(true);
-        }, 20000);
+        }, 45000); // 45s for huge PDFs
 
         try {
-            // STEP 1: Extraction
-            setProgress('Экстракция текста из PDF...');
-            const extractRes = await extractNormText(normId);
+            // STEP 0: Get PDF URL
+            setProgress('Подготовка файла...');
+            const { data: norm } = await supabase
+                .from('norm_sources')
+                .select('*, files:norm_files(storageUrl)')
+                .eq('id', normId)
+                .single();
 
-            if (!extractRes.success) {
+            const pdfUrl = (norm as any)?.files?.[0]?.storageUrl;
+            if (!pdfUrl) throw new Error('PDF-файл не найден в системе');
+
+            // STEP 1: Client-side Extraction (No timeout!)
+            setProgress('Извлечение текста из PDF (в браузере)...');
+            const fullText = await extractTextFromPdf(pdfUrl);
+
+            // STEP 2: Save to Server
+            setProgress('Сохранение текста на сервер...');
+            const saveRes = await saveExtractedText(normId, fullText);
+
+            if (!saveRes.success) {
                 clearTimeout(watchdog);
-                alert(`Ошибка экстракции: ${extractRes.error}`);
+                alert(`Ошибка сохранения: ${saveRes.error}`);
                 setParsing(false);
                 return;
             }
 
-            const totalChunks = extractRes.chunkCount || 1;
-            setProgress(`Текст извлечен. Всего блоков: ${totalChunks}`);
+            const totalChunks = saveRes.chunkCount || 1;
+            setProgress(`Текст готов. Всего блоков: ${totalChunks}`);
 
-            // STEP 2: Batch Processing
+            // STEP 3: Batch Processing
             for (let i = 0; i < totalChunks; i++) {
                 setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
                 const batchRes = await processNormBatch(normId, i, totalChunks);
@@ -121,6 +155,7 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         } catch (e: any) {
             clearTimeout(watchdog);
             setParsing(false);
+            console.error('Parse error:', e);
             alert(`Ошибка процесса: ${e.message}`);
         }
     };
