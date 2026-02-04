@@ -175,7 +175,12 @@ export async function extractNormText(normSourceId: string) {
 export async function processNormBatch(normSourceId: string, batchIndex: number, totalChunks: number, chunkText: string) {
     const supabase = createClient();
     try {
-        if (!chunkText) return { success: true, fragments: [] }; // Empty chunk
+        if (!chunkText) {
+            console.log(`[BATCH ${batchIndex}] Empty chunk text`);
+            return { success: true, fragments: [] };
+        }
+
+        console.log(`[BATCH ${batchIndex}] Processing chunk length: ${chunkText.length}`);
 
         // Update progress
         await supabase.from('norm_sources').update({
@@ -204,6 +209,8 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
 
         if (!response.ok) throw new Error(`AI API error: ${response.status}`);
         const result = await response.json();
+        console.log(`[BATCH ${batchIndex}] AI Raw Response:`, result.choices[0]?.message?.content?.substring(0, 200));
+
         const data = JSON.parse(result.choices[0]?.message?.content || '{"fragments": []}');
         const fragments = data.fragments || data.raw_norm_fragments || [];
 
