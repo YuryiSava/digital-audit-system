@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Atom, X, Activity, RefreshCw } from 'lucide-react';
-import { extractNormText, processNormBatch, saveExtractedText } from "@/app/actions/universal-parser";
+import { getSignedReadUrl, notifyTextReady, processNormBatch } from "@/app/actions/universal-parser";
 import { getNormById } from "@/app/actions/norm-library";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -103,46 +103,40 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         // Watchdog for extraction phase
         const watchdog = setTimeout(() => {
             setIsStuckAtStart(true);
-        }, 45000); // 45s for huge PDFs
+        }, 60000); // 1 min for extraction
 
         try {
-            // STEP 0: Get PDF URL
-            setProgress('Подготовка файла...');
-            const { data: norm } = await supabase
-                .from('norm_sources')
-                .select('*, files:norm_files(storageUrl)')
-                .eq('id', normId)
-                .single();
+            // STEP 1: Get Signed URL (No CORS/Public issues)
+            setProgress('Получение прав доступа к файлу...');
+            const { url: pdfUrl, success: urlSuccess, error: urlError } = await getSignedReadUrl(normId);
+            if (!urlSuccess || !pdfUrl) throw new Error(urlError || 'Не удалось получить ссылку на файл');
 
-            const pdfUrl = (norm as any)?.files?.[0]?.storageUrl;
-            if (!pdfUrl) throw new Error('PDF-файл не найден в системе');
-
-            // STEP 1: Client-side Extraction (No timeout!)
+            // STEP 2: Client-side Extraction
             setProgress('Извлечение текста из PDF (в браузере)...');
             const fullText = await extractTextFromPdf(pdfUrl);
+            if (!fullText || fullText.length < 100) throw new Error('Текст не извлечен или слишком короткий');
 
-            // STEP 2: Save to Server
-            setProgress('Сохранение текста на сервер...');
-            const saveRes = await saveExtractedText(normId, fullText);
+            // STEP 3: Direct Upload to Supabase Storage (Bypass Vercel Payload Limit)
+            setProgress('Загрузка текста в облако (напрямую)...');
+            const tempPath = `temp-text/${normId}.txt`;
+            const { error: uploadError } = await supabase.storage
+                .from('norm-docs')
+                .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
 
-            if (!saveRes.success) {
-                clearTimeout(watchdog);
-                alert(`Ошибка сохранения: ${saveRes.error}`);
-                setParsing(false);
-                return;
-            }
+            if (uploadError) throw new Error(`Ошибка загрузки: ${uploadError.message}`);
 
-            const totalChunks = saveRes.chunkCount || 1;
+            // STEP 4: Notify Server & Get Chunk Count
+            const notifyRes = await notifyTextReady(normId, fullText.length);
+            if (!notifyRes.success) throw new Error(notifyRes.error);
+
+            const totalChunks = notifyRes.chunkCount || 1;
             setProgress(`Текст готов. Всего блоков: ${totalChunks}`);
 
-            // STEP 3: Batch Processing
+            // STEP 5: Batch Processing
             for (let i = 0; i < totalChunks; i++) {
                 setProgress(`Обработка блока ${i + 1} из ${totalChunks}...`);
                 const batchRes = await processNormBatch(normId, i, totalChunks);
-
-                if (!batchRes.success) {
-                    console.error(`Batch ${i} failed:`, batchRes.error);
-                }
+                if (!batchRes.success) throw new Error(`Ошибка блока ${i + 1}: ${batchRes.error}`);
             }
 
             clearTimeout(watchdog);

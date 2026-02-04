@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabaseClient';
 import { revalidatePath } from 'next/cache';
+import crypto from 'crypto';
 
 /**
  * Project Pre-Audit Actions

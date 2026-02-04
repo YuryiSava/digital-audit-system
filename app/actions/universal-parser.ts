@@ -4,49 +4,45 @@ import { createClient } from '@/utils/supabase/server';
 import crypto from 'crypto';
 
 /**
- * STEP 0: Save Client-Extracted Text to Storage
+ * STEP -1: Generate Signed URL for Client-Side Extraction
  */
-export async function saveExtractedText(normSourceId: string, fullText: string) {
+export async function getSignedReadUrl(normSourceId: string) {
     const supabase = createClient();
     try {
-        if (!fullText || fullText.length < 100) throw new Error('Текст документа слишком короткий или пустой');
+        const { data: files } = await supabase.from('norm_files').select('storageUrl').eq('normSourceId', normSourceId).limit(1);
+        if (!files || files.length === 0) throw new Error('PDF-файл не найден');
 
-        // Update status
-        await supabase.from('norm_sources').update({
-            status: 'PARSING',
-            parsing_details: 'Сохранение извлеченного текста...',
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
+        const storageUrl = files[0].storageUrl;
+        const pathMatch = storageUrl.match(/norm-docs\/(.+)/);
+        if (!pathMatch) return { success: true, url: storageUrl }; // Public URL already
 
-        // Save to Storage (Temp)
-        const { data: buckets } = await supabase.storage.listBuckets();
-        if (!buckets?.find((b: any) => b.name === 'norm-docs')) {
-            await supabase.storage.createBucket('norm-docs', { public: true });
-        }
-
-        const tempPath = `temp-text/${normSourceId}.txt`;
-        const { error: uploadError } = await supabase.storage
+        const { data, error } = await supabase.storage
             .from('norm-docs')
-            .upload(tempPath, fullText, { contentType: 'text/plain', upsert: true });
+            .createSignedUrl(pathMatch[1], 600); // 10 mins
 
-        if (uploadError) throw new Error(`Ошибка сохранения текста: ${uploadError.message}`);
+        if (error) throw error;
+        return { success: true, url: data.signedUrl };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}
 
-        // Calculate chunks
+/**
+ * STEP 0: notify server that text is ready in storage
+ */
+export async function notifyTextReady(normSourceId: string, charCount: number) {
+    const supabase = createClient();
+    try {
         const CHUNK_SIZE = 12000;
-        const chunkCount = Math.ceil(fullText.length / CHUNK_SIZE);
+        const chunkCount = Math.ceil(charCount / CHUNK_SIZE);
 
         await supabase.from('norm_sources').update({
-            parsing_details: `Текст готов. Всего блоков: ${chunkCount}`,
+            parsing_details: `Текст готов (в облаке). Всего блоков: ${chunkCount}`,
             updatedAt: new Date().toISOString()
         }).eq('id', normSourceId);
 
-        return {
-            success: true,
-            chunkCount,
-            charCount: fullText.length
-        };
+        return { success: true, chunkCount };
     } catch (err: any) {
-        console.error('[SAVE] Error:', err);
         return { success: false, error: err.message };
     }
 }

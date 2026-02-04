@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
+import crypto from 'crypto';
 
 // --- Checklists (Привязка каталога к проекту) ---
 
