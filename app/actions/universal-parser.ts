@@ -318,16 +318,22 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
         }
 
         // Robust extraction (handling both Array and Object formats)
+        // AI often returns 'fragments' even if we ask for 'raw_norm_fragments'
         let fragments: any[] = [];
+
         if (Array.isArray(data)) {
             fragments = data;
-        } else if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) {
-            fragments = data.raw_norm_fragments;
         } else if (data.fragments && Array.isArray(data.fragments)) {
             fragments = data.fragments;
+        } else if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) {
+            fragments = data.raw_norm_fragments;
         }
 
         console.log(`[BATCH ${batchIndex}] Extracted ${fragments.length} fragments`);
+
+        if (fragments.length > 0) {
+            console.log(`[BATCH ${batchIndex}] Sample:`, JSON.stringify(fragments[0]).substring(0, 100));
+        }
 
         // 4. Save to DB
         if (fragments.length > 0) {
