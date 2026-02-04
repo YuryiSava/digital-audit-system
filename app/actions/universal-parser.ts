@@ -142,29 +142,58 @@ export async function notifyTextReady(normSourceId: string, charCount: number) {
  * STEP 1: Extract Text and Save to Storage
  */
 export async function extractNormText(normSourceId: string) {
-    const supabase = createClient();
+    const supabase = createClientWithServiceRole(); // Use Admin for RLS bypass
     try {
         console.log(`[EXTRACT] Starting extraction for ${normSourceId}`);
+        const pdf = require('pdf-parse');
 
         // Update status
         await supabase.from('norm_sources').update({
             status: 'PARSING',
-            parsing_details: 'Извлечение текста из PDF...',
+            parsing_details: 'Скачивание PDF (Server Side)...',
             updatedAt: new Date().toISOString()
         }).eq('id', normSourceId);
 
-        return {
-            success: false,
-            error: 'Server-side extraction is deprecated. Use client-side extraction instead.'
-        };
+        // 1. Get File URL
+        const { data: files } = await supabase
+            .from('norm_files')
+            .select('storageUrl')
+            .eq('normSourceId', normSourceId)
+            .limit(1);
+
+        if (!files || !files.length) throw new Error('Файл не найден');
+
+        // 2. Download File
+        const storageUrl = files[0].storageUrl;
+        let pdfBuffer;
+
+        if (storageUrl.startsWith('http')) {
+            const res = await fetch(storageUrl);
+            const arrayBuffer = await res.arrayBuffer();
+            pdfBuffer = Buffer.from(arrayBuffer);
+        } else {
+            // Assume internal storage path, try to download via admin client
+            const path = storageUrl.split('norm-docs/')[1];
+            const { data, error } = await supabase.storage.from('norm-docs').download(path);
+            if (error) throw error;
+            pdfBuffer = Buffer.from(await data.arrayBuffer());
+        }
+
+        // 3. Extract Text
+        await supabase.from('norm_sources').update({ parsing_details: 'Извлечение текста (PDF Parse)...' }).eq('id', normSourceId);
+        const data = await pdf(pdfBuffer);
+        const text = data.text;
+
+        if (!text || text.length < 100) throw new Error('Пустой текст после извлечения');
+
+        // 4. Save to Temp Storage
+        const tempPath = `temp-text/${normSourceId}.txt`;
+        await supabase.storage.from('norm-docs').upload(tempPath, text, { upsert: true, contentType: 'text/plain' });
+
+        return { success: true, chunkCount: Math.ceil(text.length / 12000) };
 
     } catch (err: any) {
         console.error('[EXTRACT] Error:', err);
-        await supabase.from('norm_sources').update({
-            status: 'DRAFT',
-            parsing_details: `Ошибка экстракции: ${err.message}`,
-            updatedAt: new Date().toISOString()
-        }).eq('id', normSourceId);
         return { success: false, error: err.message };
     }
 }

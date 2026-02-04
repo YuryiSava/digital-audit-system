@@ -80,47 +80,7 @@ export function UniversalParseButton({ normId }: { normId: string }) {
         };
     }, [parsing, open, isPolling, normId, supabase]);
 
-    const extractTextFromPdf = async (url: string) => {
-        try {
-            console.log('[PDF] Loading PDF.js library...');
-            const pdfjs = await import('pdfjs-dist');
-
-            console.log('[PDF] Setting worker source...');
-            // @ts-ignore
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-
-            console.log('[PDF] Loading document from URL:', url.substring(0, 100) + '...');
-            const loadingTask = pdfjs.getDocument(url);
-
-            const pdf = await loadingTask.promise;
-            console.log('[PDF] Document loaded. Total pages:', pdf.numPages);
-
-            let fullText = '';
-
-            for (let i = 1; i <= pdf.numPages; i++) {
-                setProgress(`Извлечение текста: страница ${i} из ${pdf.numPages}...`);
-                console.log(`[PDF] Processing page ${i}/${pdf.numPages}...`);
-
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map((item: any) => item.str).join(' ');
-                fullText += pageText + '\n';
-
-                if (i % 5 === 0) {
-                    console.log(`[PDF] Extracted ${i} pages so far. Text length:`, fullText.length);
-                }
-            }
-
-            console.log('[PDF] ✓ Extraction complete! Total text length:', fullText.length);
-            return fullText;
-        } catch (error: any) {
-            console.error('[PDF] ❌ Error during PDF extraction:', error);
-            console.error('[PDF] Error name:', error.name);
-            console.error('[PDF] Error message:', error.message);
-            console.error('[PDF] Error stack:', error.stack);
-            throw new Error(`PDF extraction failed: ${error.message}`);
-        }
-    };
+    // Client-side extraction removed - trusting server-side (v2.0 logic)
 
     const handleParse = async () => {
         setIsStuckAtStart(false);
