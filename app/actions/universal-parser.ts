@@ -1,8 +1,8 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
-import type { Database } from '@/types/supabase';
 
 // ============================================================================
 // UNIVERSAL META-PROMPT (SYSTEM) - PURE COPY FROM parse-pdf-universal.js
@@ -26,11 +26,23 @@ const SYSTEM_PROMPT = `
 — фиксируешь условия, ограничения и параметры,
 — сохраняешь привязку к источнику.
 
-🚨 ВАЖНОЕ ПРАВИЛО ЯЗЫКА:
-Документ может содержать текст на двух языках (KZ/RU).
-ТЫ ДОЛЖЕН ИГНОРИРОВАТЬ ВЕСЬ ТЕКСТ НА КАЗАХСКОМ ЯЗЫКЕ.
-ИЗВЛЕКАЙ ТОЛЬКО ТЕКСТ НА РУССКОМ ЯЗЫКЕ.
-Если фрагмент (или колонка таблицы) на казахском — ПРОПУСКАЙ ЕГО.
+🚨🚨🚨 КРИТИЧЕСКИ ВАЖНОЕ ПРАВИЛО — ЯЗЫК 🚨🚨🚨
+
+Документ ДВУЯЗЫЧНЫЙ (казахский + русский).
+ТЫ ОБЯЗАН ПОЛНОСТЬЮ ИГНОРИРОВАТЬ КАЗАХСКИЙ ЯЗЫК.
+
+❌ ПРИЗНАКИ КАЗАХСКОГО ТЕКСТА (ПРОПУСКАЙ ВСЁ ЭТО):
+• Окончания: -ның, -нің, -дың, -дің, -тың, -тің
+• Слова: болуы тиіс, қабылданады, рұқсат етіледі, талап етіледі
+• Суффиксы: -лар/-лер, -дар/-дер, -тар/-тер
+• Специфичные буквы: ә, ғ, қ, ң, ө, ұ, ү, һ, і
+
+✅ ИЗВЛЕКАЙ ТОЛЬКО РУССКИЙ ТЕКСТ:
+• "должен", "не допускается", "следует", "требуется"
+• Стандартная кириллица без казахских букв
+
+⚠️ ПРИОРИТЕТ: русский текст. Но если сомневаешься — ВКЛЮЧИ фрагмент (лучше включить казахский, чем пропустить важное).
+⚠️ Если в колонке таблицы казахский текст — попробуй найти русский эквивалент в соседней колонке.
 `;
 
 const EXTRACTION_CRITERIA = `
@@ -78,7 +90,7 @@ const OUTPUT_FORMAT = `
     "source_section": "раздел / глава",
     "source_clause": "пункт / подпункт",
     "raw_text": "ТОЧНАЯ цитата без изменений",
-    "detected_modality": "должен | не допускается | следует | null",
+    "detected_modality": "должен | не допускается | следует | рекомендуется | null",
     "detected_conditions": ["условие 1", "условие 2"],
     "detected_parameters": [
       {
@@ -88,9 +100,24 @@ const OUTPUT_FORMAT = `
       }
     ],
     "predicted_requirement_type": "constructive | functional | parameterized | operational | prohibitive | conditional | base | undefined",
+    "check_method": "visual | document | test | measurement | log",
+    "tags": ["тег1", "тег2"],
     "confidence_score": 0.95
   }
 ]
+
+## ПРАВИЛА ЗАПОЛНЕНИЯ ПОЛЕЙ:
+
+### check_method (метод проверки):
+- "visual" — визуальный осмотр (установка, монтаж, маркировка)
+- "document" — проверка документации (проект, сертификат, акт)
+- "test" — функциональное испытание (включение, срабатывание)
+- "measurement" — измерения (расстояние, сопротивление, напряжение)
+- "log" — проверка журналов (обслуживание, события)
+
+### tags (теги) — определи применимые системы и категории:
+- Системы: АПС, СОУЭ, ВН, СКД, ОС, ПТ, ДУ
+- Категории: кабели, извещатели, оповещатели, питание, заземление, монтаж
 
 СТРОГИЕ ПРАВИЛА:
 ❌ НЕ создавай нормативные требования
@@ -133,6 +160,7 @@ export async function runFullParsing(normSourceId: string) {
             .from('norm_files')
             .select('storageUrl')
             .eq('normSourceId', normSourceId)
+            .order('uploadedAt', { ascending: false })
             .limit(1);
 
         if (!files || !files.length) throw new Error('File record not found');
@@ -166,6 +194,8 @@ export async function runFullParsing(normSourceId: string) {
 
         // 3. Extract Text via PDF-Parse
         await supabase.from('norm_sources').update({ parsing_details: 'Извлечение текста (PDF)...' }).eq('id', normSourceId);
+
+        // Revert to require for robustness
         const pdf = require('pdf-parse');
         const pdfData = await pdf(pdfBuffer);
         const fullText = pdfData.text;
@@ -206,7 +236,7 @@ export async function runFullParsing(normSourceId: string) {
                             messages: [
                                 { role: "system", content: SYSTEM_PROMPT + '\n' + EXTRACTION_CRITERIA + '\n' + OUTPUT_FORMAT },
                                 { role: "user", content: `## ТЕКСТ (БЛОК ${chunkNum})\n${chunk}\n\n🚨 ПРАВИЛО: Извлекай ТОЛЬКО русский текст.\nВерни JSON массив.` }
-                            ], // Using slightly simplified user prompt but FULL system prompt
+                            ],
                             response_format: { type: "json_object" },
                             temperature: 0.1
                         })
@@ -218,7 +248,7 @@ export async function runFullParsing(normSourceId: string) {
                     if (!content) return [];
 
                     const data = JSON.parse(content);
-                    // Robust extraction logic from my last fix
+                    // Robust extraction logic
                     if (Array.isArray(data)) return data;
                     if (data.fragments && Array.isArray(data.fragments)) return data.fragments;
                     if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) return data.raw_norm_fragments;
@@ -252,6 +282,8 @@ export async function runFullParsing(normSourceId: string) {
                 detectedConditions: f.detected_conditions || [],
                 detectedParameters: f.detected_parameters || null,
                 predictedRequirementType: f.predicted_requirement_type || null,
+                checkMethod: f.check_method || 'visual',
+                tags: f.tags || [],
                 confidenceScore: f.confidence_score || 0.8,
                 status: 'PENDING',
                 createdAt: new Date().toISOString(),
@@ -262,7 +294,11 @@ export async function runFullParsing(normSourceId: string) {
             const DB_BATCH = 50;
             for (let i = 0; i < records.length; i += DB_BATCH) {
                 const batch = records.slice(i, i + DB_BATCH);
-                await supabase.from('raw_norm_fragments').insert(batch);
+                const { error: insertError } = await supabase.from('raw_norm_fragments').insert(batch);
+                if (insertError) {
+                    console.error('FRAGMENT INSERT ERROR:', insertError);
+                    console.error('First record sample:', JSON.stringify(batch[0], null, 2));
+                }
             }
         }
 
@@ -286,9 +322,8 @@ export async function runFullParsing(normSourceId: string) {
     }
 }
 
-// Helpers retained
+// Helper with imported createSupabaseClient
 function createClientWithServiceRole() {
-    const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
     return createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -296,9 +331,9 @@ function createClientWithServiceRole() {
     );
 }
 
-// Stub for exported functions to keep imports working temporarily if needed (deprecated)
-export async function getSignedReadUrl() { return { success: false } }
-export async function getSignedUploadUrl() { return { success: false } }
-export async function notifyTextReady() { return { success: false } }
-export async function extractNormText() { return { success: false } }
-export async function processNormBatch() { return { success: false } }
+// Stubs for exported functions to keep imports working if needed (deprecated calls)
+export async function getSignedReadUrl() { return { success: false, error: 'Deprecated' } }
+export async function getSignedUploadUrl() { return { success: false, error: 'Deprecated' } }
+export async function notifyTextReady() { return { success: false, error: 'Deprecated' } }
+export async function extractNormText() { return { success: false, error: 'Deprecated' } }
+export async function processNormBatch() { return { success: false, error: 'Deprecated' } }
