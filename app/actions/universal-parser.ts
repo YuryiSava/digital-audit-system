@@ -308,8 +308,26 @@ export async function processNormBatch(normSourceId: string, batchIndex: number,
         const result = await response.json();
         console.log(`[BATCH ${batchIndex}] AI Raw Response:`, result.choices[0]?.message?.content?.substring(0, 200));
 
-        const data = JSON.parse(result.choices[0]?.message?.content || '{"fragments": []}');
-        const fragments = data.fragments || data.raw_norm_fragments || [];
+        const content = result.choices[0]?.message?.content || '[]';
+        let data;
+        try {
+            data = JSON.parse(content);
+        } catch (e) {
+            console.error(`[BATCH ${batchIndex}] JSON Parse Error:`, e);
+            return { success: false, error: 'JSON Parse Error' };
+        }
+
+        // Robust extraction (handling both Array and Object formats)
+        let fragments: any[] = [];
+        if (Array.isArray(data)) {
+            fragments = data;
+        } else if (data.raw_norm_fragments && Array.isArray(data.raw_norm_fragments)) {
+            fragments = data.raw_norm_fragments;
+        } else if (data.fragments && Array.isArray(data.fragments)) {
+            fragments = data.fragments;
+        }
+
+        console.log(`[BATCH ${batchIndex}] Extracted ${fragments.length} fragments`);
 
         // 4. Save to DB
         if (fragments.length > 0) {
