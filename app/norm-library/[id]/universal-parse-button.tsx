@@ -124,13 +124,18 @@ export function UniversalParseButton({ normId }: { normId: string }) {
 
     if (!open) {
         return (
-            <button
-                onClick={() => setOpen(true)}
-                className="text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-3 py-1.5 rounded transition-all flex items-center gap-2 shadow-lg"
-            >
-                <Atom className="w-3 h-3" />
-                {parsing ? 'Парсинг выполняется...' : 'Универсал. парсинг (v2)'}
-            </button>
+            <div className="flex flex-col items-end">
+                <button
+                    onClick={() => setOpen(true)}
+                    className="text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-3 py-1.5 rounded transition-all flex items-center gap-2 shadow-lg"
+                >
+                    <Atom className="w-3 h-3" />
+                    {parsing ? 'Парсинг выполняется...' : 'Универсал. парсинг (v2)'}
+                </button>
+                <p className="text-[10px] text-amber-400/70 mt-1">
+                    💡 Рекомендуется на локальной версии
+                </p>
+            </div>
         );
     }
 

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getRawFragments } from '@/app/actions/get-raw-fragments';
-import { updateFragmentStatus as updateFragmentStatusAction } from '@/app/actions/update-fragment-status';
+import { updateFragmentStatus as updateFragmentStatusAction, updateFragmentTags } from '@/app/actions/update-fragment-status';
 import { convertFragmentsToRequirements } from '@/app/actions/convert-fragments';
 import { deleteRawFragments } from '@/app/actions/delete-raw-fragments';
-import { Check, X, ArrowRight, Trash2 } from 'lucide-react';
+import { Check, X, ArrowRight, Trash2, Edit2 } from 'lucide-react';
 
 interface RawFragment {
     id: string;
@@ -20,6 +20,8 @@ interface RawFragment {
     confidenceScore: number | null;
     status: string;
     createdAt: string;
+    tags?: string[];
+    checkMethod?: string;
 }
 
 const REQUIREMENT_TYPES: Record<string, string> = {
@@ -40,11 +42,33 @@ const STATUS_LABELS: Record<string, string> = {
     'PROCESSED': 'Обработано'
 };
 
+const PREDEFINED_TAGS = {
+    systems: [
+        { id: 'APS', label: 'АПС' },
+        { id: 'SOUE', label: 'СОУЭ' },
+        { id: 'CCTV', label: 'ВН' },
+        { id: 'ACS', label: 'СКД' },
+        { id: 'OS', label: 'ОС' },
+        { id: 'PT', label: 'ПТ' },
+        { id: 'DU', label: 'ДУ' },
+    ],
+    categories: [
+        { id: 'cables', label: 'кабели' },
+        { id: 'detectors', label: 'извещатели' },
+        { id: 'notifiers', label: 'оповещатели' },
+        { id: 'power', label: 'питание' },
+        { id: 'grounding', label: 'заземление' },
+        { id: 'installation', label: 'монтаж' },
+    ]
+};
+
 export default function RawFragmentsTab({ normSourceId }: { normSourceId: string }) {
     const [fragments, setFragments] = useState<RawFragment[]>([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<string | null>(null);
     const [converting, setConverting] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editTags, setEditTags] = useState('');
 
     useEffect(() => {
         loadFragments();
@@ -69,6 +93,25 @@ export default function RawFragmentsTab({ normSourceId }: { normSourceId: string
             await loadFragments();
         }
         setUpdating(null);
+    }
+
+    async function handleSaveTags(fragmentId: string) {
+        const tagsArray = editTags.split(',').map(t => t.trim()).filter(Boolean);
+        const result = await updateFragmentTags(fragmentId, { tags: tagsArray }, normSourceId);
+        if (result.success) {
+            setFragments(prev => prev.map(f =>
+                f.id === fragmentId ? { ...f, tags: tagsArray } : f
+            ));
+        } else {
+            alert('Ошибка сохранения тегов');
+        }
+        setEditingId(null);
+        setEditTags('');
+    }
+
+    function startEditing(fragment: RawFragment) {
+        setEditingId(fragment.id);
+        setEditTags((fragment.tags || []).join(', '));
     }
 
     async function handleConvertToRequirements() {
@@ -217,7 +260,84 @@ export default function RawFragmentsTab({ normSourceId }: { normSourceId: string
                                     {fragment.detectedConditions.length} условий
                                 </span>
                             )}
+                            {fragment.tags && fragment.tags.map((tag, i) => (
+                                <span key={i} className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded">
+                                    {tag}
+                                </span>
+                            ))}
+                            <button
+                                onClick={() => startEditing(fragment)}
+                                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded flex items-center gap-1"
+                            >
+                                <Edit2 className="h-3 w-3" />
+                                Теги
+                            </button>
                         </div>
+
+                        {editingId === fragment.id && (
+                            <div className="mb-3 p-3 bg-black/30 border border-white/10 rounded-lg">
+                                <div className="mb-2">
+                                    <span className="text-xs text-gray-400 uppercase">Системы:</span>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {PREDEFINED_TAGS.systems.map(tag => (
+                                            <label key={tag.id} className="flex items-center gap-1 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editTags.split(',').map(t => t.trim()).includes(tag.label)}
+                                                    onChange={(e) => {
+                                                        const current = editTags.split(',').map(t => t.trim()).filter(Boolean);
+                                                        if (e.target.checked) {
+                                                            setEditTags([...current, tag.label].join(', '));
+                                                        } else {
+                                                            setEditTags(current.filter(t => t !== tag.label).join(', '));
+                                                        }
+                                                    }}
+                                                    className="rounded border-white/10 bg-black/30"
+                                                />
+                                                <span className="text-sm text-gray-300">{tag.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="mb-3">
+                                    <span className="text-xs text-gray-400 uppercase">Категории:</span>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {PREDEFINED_TAGS.categories.map(tag => (
+                                            <label key={tag.id} className="flex items-center gap-1 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editTags.split(',').map(t => t.trim()).includes(tag.label)}
+                                                    onChange={(e) => {
+                                                        const current = editTags.split(',').map(t => t.trim()).filter(Boolean);
+                                                        if (e.target.checked) {
+                                                            setEditTags([...current, tag.label].join(', '));
+                                                        } else {
+                                                            setEditTags(current.filter(t => t !== tag.label).join(', '));
+                                                        }
+                                                    }}
+                                                    className="rounded border-white/10 bg-black/30"
+                                                />
+                                                <span className="text-sm text-gray-300">{tag.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleSaveTags(fragment.id)}
+                                        className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+                                    >
+                                        Сохранить
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingId(null)}
+                                        className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+                                    >
+                                        Отмена
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {fragment.status === 'PENDING' && (
                             <div className="flex gap-2 pt-2 border-t border-white/10">

@@ -173,25 +173,69 @@ const RequirementSchema = z.object({
 
 export type RequirementData = z.infer<typeof RequirementSchema>;
 
+
 export async function createRequirement(data: RequirementData) {
     const supabase = createClient();
     const validation = RequirementSchema.safeParse(data);
     if (!validation.success) return { success: false, error: validation.error.format() };
 
-    const { requirementSetId, systemId, ...rest } = validation.data;
+    const { requirementSetId, systemId, normSourceId, ...rest } = validation.data;
+    const now = new Date().toISOString();
 
-    // Генерируем ID
+    // Step 1: Check if the requirementSetId exists, if not - create one for this norm
+    let finalSetId = requirementSetId;
+
+    // Check if it's a valid existing ID
+    const { data: existingSet } = await supabase
+        .from('requirement_sets')
+        .select('id')
+        .eq('id', requirementSetId)
+        .single();
+
+    if (!existingSet) {
+        // Auto-create a requirement set for this norm
+        console.log(`🔧 Auto-creating requirement set for norm ${normSourceId}`);
+
+        const newSetId = crypto.randomUUID();
+        const setCode = `RS-${normSourceId.substring(0, 8)}`;
+
+        const { data: newSet, error: setError } = await supabase
+            .from('requirement_sets')
+            .insert([{
+                id: newSetId,
+                requirementSetId: setCode,
+                systemId: systemId,
+                jurisdiction: 'KZ',
+                version: '1.0',
+                status: 'DRAFT',
+                notes: `Автоматически создан для нормы ${normSourceId}`,
+                createdAt: now,
+                updatedAt: now
+            }])
+            .select()
+            .single();
+
+        if (setError) {
+            console.error('Auto-create requirement set error:', setError);
+            return { success: false, error: `Не удалось создать набор требований: ${setError.message}` };
+        }
+
+        finalSetId = newSet.id;
+        console.log(`✅ Created requirement set ${finalSetId}`);
+    }
+
+    // Step 2: Create the requirement with the valid set ID
     const randomSuffix = Math.floor(10000 + Math.random() * 90000);
     const requirementId = `REQ-${systemId}-${randomSuffix}`;
-    const now = new Date().toISOString();
 
     const { data: newReq, error } = await supabase
         .from('requirements')
         .insert([{
             id: crypto.randomUUID(),
             requirementId,
-            requirementSetId,
+            requirementSetId: finalSetId,
             systemId,
+            normSourceId,
             ...rest,
             createdAt: now,
             updatedAt: now
@@ -204,9 +248,11 @@ export async function createRequirement(data: RequirementData) {
         return { success: false, error: error.message };
     }
 
-    revalidatePath(`/requirements/${requirementSetId}`);
+    revalidatePath(`/requirements/${finalSetId}`);
+    revalidatePath(`/norm-library/${normSourceId}`);
     return { success: true, data: newReq };
 }
+
 
 // --- BATCH IMPORT ---
 
@@ -277,7 +323,6 @@ export async function updateRequirement(
         checkMethod?: string;
         mustCheck?: boolean;
         tags?: string[];
-        notes?: string;
     }
 ) {
     const supabase = createClient();

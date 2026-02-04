@@ -15,7 +15,6 @@ interface EditRequirementButtonProps {
         checkMethod?: string;
         mustCheck?: boolean;
         tags?: string[];
-        notes?: string;
     };
 }
 
@@ -31,8 +30,7 @@ export function EditRequirementButton({ requirement }: EditRequirementButtonProp
         requirementTextFull: requirement.requirementTextFull || '',
         checkMethod: requirement.checkMethod || 'visual',
         mustCheck: requirement.mustCheck || false,
-        tags: requirement.tags?.join(', ') || '',
-        notes: requirement.notes || ''
+        tags: requirement.tags?.join(', ') || ''
     });
 
     const handleOpen = async () => {
@@ -53,8 +51,7 @@ export function EditRequirementButton({ requirement }: EditRequirementButtonProp
                 requirementTextFull: formData.requirementTextFull,
                 checkMethod: formData.checkMethod as any,
                 mustCheck: formData.mustCheck,
-                tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-                notes: formData.notes
+                tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
             });
 
             if (result.success) {
@@ -211,19 +208,7 @@ export function EditRequirementButton({ requirement }: EditRequirementButtonProp
                         </p>
                     </div>
 
-                    {/* Row 6: Notes */}
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">
-                            Примечания
-                        </label>
-                        <textarea
-                            value={formData.notes}
-                            onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                            rows={2}
-                            placeholder="Дополнительные заметки..."
-                        />
-                    </div>
+
                 </div>
 
                 {/* Footer */}
