@@ -89,7 +89,7 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
                                 <select
                                     value={formData.category}
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-white"
+                                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded text-white"
                                 >
                                     <option value="">Без раздела</option>
                                     <option value="Пожарная безопасность">Пожарная безопасность</option>
@@ -108,7 +108,7 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
                                 <select
                                     value={formData.jurisdiction}
                                     onChange={(e) => setFormData({ ...formData, jurisdiction: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-white"
+                                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded text-white"
                                 >
                                     <option value="KZ">Казахстан (KZ)</option>
                                     <option value="RU">Россия (RU)</option>
@@ -142,7 +142,7 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
                                 <select
                                     value={formData.status}
                                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-white"
+                                    className="w-full px-3 py-2 bg-slate-800 border border-white/10 rounded text-white"
                                 >
                                     <option value="DRAFT">DRAFT (Черновик)</option>
                                     <option value="ACTIVE">ACTIVE (Действует)</option>
