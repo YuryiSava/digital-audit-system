@@ -12,7 +12,6 @@ const NormSourceSchema = z.object({
     docType: z.string().min(1, "Тип документа обязателен"),
     code: z.string().min(1, "Шифр/Номер обязателен"),
     title: z.string().min(1, "Название обязательно"),
-    category: z.string().optional().nullable(),
     publisher: z.string().optional(),
     editionDate: z.string().optional().nullable(),
     status: z.enum(['DRAFT', 'ACTIVE', 'SUPERSEDED']).default('DRAFT'),
@@ -135,7 +134,6 @@ export async function createNormSource(formData: FormData) {
         docType: formData.get('docType'),
         code: formData.get('code'),
         title: formData.get('title'),
-        category: formData.get('category'),
         publisher: formData.get('publisher'),
         editionDate: formData.get('editionDate'),
         status: formData.get('status') || 'DRAFT',
@@ -242,10 +240,10 @@ export async function updateNormMetadata(
         title: string;
         docType: string;
         jurisdiction: string;
-        category?: string;
         editionDate: string;
         publisher: string;
         status: string;
+        category?: string;
     }
 ) {
     const supabase = createClient();
@@ -256,10 +254,10 @@ export async function updateNormMetadata(
             title: data.title,
             docType: data.docType,
             jurisdiction: data.jurisdiction,
-            category: data.category || null,
             editionDate: data.editionDate || null,
             publisher: data.publisher || null,
             status: data.status,
+            category: data.category || null,
             updatedAt: new Date().toISOString()
         })
         .eq('id', normId);
@@ -489,4 +487,22 @@ export async function deleteNormFile(fileId: string, normId: string) {
         console.error('Delete file error:', e);
         return { success: false, error: e.message };
     }
+}
+
+/**
+ * Force reset parsing status to DRAFT
+ */
+export async function resetParsingStatus(normId: string) {
+    const supabase = createClient();
+    const { error } = await supabase
+        .from('norm_sources')
+        .update({ status: 'DRAFT', parsing_details: null })
+        .eq('id', normId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+
+    revalidatePath(`/norm-library/${normId}`);
+    return { success: true };
 }

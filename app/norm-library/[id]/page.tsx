@@ -59,7 +59,8 @@ export default async function NormDetailPage({ params }: { params: { id: string 
                                         editionDate: norm.editionDate,
                                         publisher: norm.publisher,
                                         status: norm.status,
-                                        title: norm.title
+                                        title: norm.title,
+                                        category: norm.category
                                     }}
                                 />
                             </div>

@@ -13,6 +13,7 @@ interface EditNormMetadataButtonProps {
         publisher: string | null;
         status: string;
         title: string;
+        category: string | null;
     };
 }
 
@@ -25,7 +26,8 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
         editionDate: currentData.editionDate || '',
         publisher: currentData.publisher || '',
         status: currentData.status,
-        title: currentData.title
+        title: currentData.title,
+        category: currentData.category || ''
     });
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -54,8 +56,8 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
             </button>
 
             {isOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-                    <div className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto my-8">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-white/10 rounded-xl p-6 w-full max-w-md my-8">
                         <h3 className="text-xl font-bold text-white mb-4">Редактировать метаданные</h3>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,6 +82,25 @@ export function EditNormMetadataButton({ normId, currentData }: EditNormMetadata
                                     placeholder="ГОСТ, СП, СНиП..."
                                     required
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Раздел системы</label>
+                                <select
+                                    value={formData.category}
+                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-white"
+                                >
+                                    <option value="">Без раздела</option>
+                                    <option value="Пожарная безопасность">Пожарная безопасность</option>
+                                    <option value="Электроснабжение">Электроснабжение</option>
+                                    <option value="Водоснабжение">Водоснабжение</option>
+                                    <option value="Вентиляция">Вентиляция</option>
+                                    <option value="Отопление">Отопление</option>
+                                    <option value="Строительные конструкции">Строительные конструкции</option>
+                                    <option value="Охрана труда">Охрана труда</option>
+                                    <option value="Экология">Экология</option>
+                                </select>
                             </div>
 
                             <div>
