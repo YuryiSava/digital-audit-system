@@ -25,6 +25,7 @@ export function AuditExecutionList({ results, onResultsChange, checklistId, proj
             updatedItem.status,
             updatedItem.comment,
             updatedItem.photos,
+            updatedItem.videoLink,
             {
                 isMultiple: updatedItem.isMultiple,
                 totalCount: updatedItem.totalCount,
