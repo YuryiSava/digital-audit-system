@@ -34,7 +34,8 @@ export function CreateNormDialog() {
             data.append('docType', formData.docType);
             data.append('code', formData.code);
             data.append('title', formData.title);
-            data.append('category', formData.category);
+            // category field not in DB yet, skipping for now
+            // data.append('category', formData.category);
             data.append('publisher', formData.publisher);
             data.append('editionDate', formData.editionDate);
             data.append('status', 'DRAFT');

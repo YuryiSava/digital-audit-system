@@ -169,6 +169,7 @@ const RequirementSchema = z.object({
     requirementTextFull: z.string().optional(),
     checkMethod: z.string().default('visual'),
     severityHint: z.string().optional(),
+    typical_faults: z.array(z.string()).optional(),
 });
 
 export type RequirementData = z.infer<typeof RequirementSchema>;
@@ -323,6 +324,7 @@ export async function updateRequirement(
         checkMethod?: string;
         mustCheck?: boolean;
         tags?: string[];
+        typical_faults?: string[];
     }
 ) {
     const supabase = createClient();

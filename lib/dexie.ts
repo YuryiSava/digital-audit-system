@@ -26,9 +26,15 @@ export interface LocalAuditResult {
     status: string;
     comment?: string;
     photos?: string[];
+    videoLink?: string;
     requirementContent: string;
     requirementClause: string;
     updatedAt: string;
+    isMultiple?: boolean;
+    totalCount?: number;
+    failCount?: number;
+    inspectionMethod?: string;
+    defect_items?: any[];
 }
 
 export interface LocalImage {

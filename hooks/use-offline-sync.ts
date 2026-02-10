@@ -44,7 +44,9 @@ export function useOfflineSync() {
                         op.targetId,
                         op.data.status,
                         op.data.comment,
-                        op.data.photos
+                        op.data.photos,
+                        op.data.videoLink,
+                        op.data.quantitativeData
                     );
                     if (res.success) {
                         await db.syncQueue.delete(op.id!);
@@ -72,7 +74,19 @@ export function useOfflineSync() {
                                 await db.syncQueue.add({
                                     type: 'UPDATE_RESULT',
                                     targetId: img.resultId,
-                                    data: { status: result.status, comment: result.comment, photos: newPhotos },
+                                    data: {
+                                        status: result.status,
+                                        comment: result.comment,
+                                        photos: newPhotos,
+                                        // Include quantitative data if it exists on the result
+                                        quantitativeData: {
+                                            isMultiple: result.isMultiple,
+                                            totalCount: result.totalCount,
+                                            failCount: result.failCount,
+                                            inspectionMethod: result.inspectionMethod,
+                                            defect_items: result.defect_items
+                                        }
+                                    },
                                     timestamp: Date.now()
                                 });
                             }
@@ -137,7 +151,13 @@ export function useOfflineSync() {
                         photos: result.photos,
                         requirementContent: result.requirement?.content,
                         requirementClause: result.requirement?.clause,
-                        updatedAt: now
+                        updatedAt: now,
+                        // Additional fields
+                        isMultiple: result.isMultiple,
+                        totalCount: result.totalCount,
+                        failCount: result.failCount,
+                        inspectionMethod: result.inspectionMethod,
+                        defect_items: result.defect_items
                     });
                 }
             }
@@ -153,22 +173,46 @@ export function useOfflineSync() {
     };
 
     // 4. Update Audit Result (The Offline-First Way)
-    const updateResult = async (resultId: string, status: string, comment?: string, photos?: string[]) => {
+    const updateResult = async (
+        resultId: string,
+        status: string,
+        comment?: string,
+        photos?: string[],
+        videoLink?: string,
+        quantitativeData?: {
+            isMultiple?: boolean;
+            totalCount?: number;
+            failCount?: number;
+            inspectionMethod?: string;
+            defect_items?: any[];
+        }
+    ) => {
         const updatedAt = new Date().toISOString();
 
         // Update local DB immediately
-        await db.auditResults.update(resultId, {
+        const updatePayload: any = {
             status,
             comment,
             photos,
+            videoLink,
             updatedAt
-        });
+        };
+
+        if (quantitativeData) {
+            if (quantitativeData.isMultiple !== undefined) updatePayload.isMultiple = quantitativeData.isMultiple;
+            if (quantitativeData.totalCount !== undefined) updatePayload.totalCount = quantitativeData.totalCount;
+            if (quantitativeData.failCount !== undefined) updatePayload.failCount = quantitativeData.failCount;
+            if (quantitativeData.inspectionMethod !== undefined) updatePayload.inspectionMethod = quantitativeData.inspectionMethod;
+            if (quantitativeData.defect_items !== undefined) updatePayload.defect_items = quantitativeData.defect_items;
+        }
+
+        await db.auditResults.update(resultId, updatePayload);
 
         // Queue for sync
         await db.syncQueue.add({
             type: 'UPDATE_RESULT',
             targetId: resultId,
-            data: { status, comment, photos },
+            data: { status, comment, photos, videoLink, quantitativeData },
             timestamp: Date.now()
         });
 

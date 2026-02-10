@@ -1,34 +1,29 @@
 import Link from "next/link";
 import { ArrowLeft, MapPin, Calendar, CheckSquare, AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import { getProjectById } from "@/app/actions/projects";
-import { getProjectChecklists } from "@/app/actions/audit";
+import { getProjectFullExecutionData } from "@/app/actions/audit";
 import { SyncButton } from "@/components/field/sync-button";
 import { formatDate } from "@/lib/utils";
+import { UnifiedAuditView } from "@/components/audit/unified-audit-view";
 
 export const dynamic = 'force-dynamic';
 
 export default async function FieldProjectDetails({ params }: { params: { id: string } }) {
-    const { data: project } = await getProjectById(params.id);
-    const { data: checklists } = await getProjectChecklists(params.id);
+    // Fetch full unified data
+    const { success, error, project, results } = await getProjectFullExecutionData(params.id);
 
-    if (!project) {
+    if (!success || !project) {
         return (
             <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-                <p>Проект не найден</p>
+                <p>Проект не найден или ошибка загрузки: {error}</p>
             </div>
         );
     }
 
-    // Calculate generic stats
-    const totalChecklists = checklists?.length || 0;
-    const completedChecklists = checklists?.filter((c: any) => c.status === 'COMPLETED').length || 0;
-    const inProgressChecklists = checklists?.filter((c: any) => c.status === 'IN_PROGRESS').length || 0;
-
-    // Calculate total defects/violations from all checklists
-    const riskCount = checklists?.reduce((total: number, checklist: any) => {
-        const violations = checklist.results?.filter((r: any) => r.status === 'VIOLATION').length || 0;
-        return total + violations;
-    }, 0) || 0;
+    // Calculate stats
+    const totalItems = results?.length || 0;
+    const completedItems = results?.filter((r: any) => r.status !== 'NOT_CHECKED').length || 0;
+    const violationCount = results?.filter((r: any) => r.status === 'VIOLATION').length || 0;
 
     return (
         <div className="min-h-screen bg-slate-950 text-white pb-6">
@@ -70,82 +65,22 @@ export default async function FieldProjectDetails({ params }: { params: { id: st
 
                     <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
                         <div className="bg-slate-950 rounded-xl p-3 flex flex-col items-center justify-center text-center">
-                            <span className="text-2xl font-bold text-white">{completedChecklists}/{totalChecklists}</span>
-                            <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">Систем проверено</span>
+                            <span className="text-2xl font-bold text-white">{completedItems}/{totalItems}</span>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">Прогресс</span>
                         </div>
                         <div className="bg-slate-950 rounded-xl p-3 flex flex-col items-center justify-center text-center">
-                            <span className="text-2xl font-bold text-amber-400">{riskCount}</span>
-                            <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">Дефектов</span>
+                            <span className="text-2xl font-bold text-amber-400">{violationCount}</span>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">Дефекты</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Checklists List */}
+                {/* Unified Audit View */}
                 <div>
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 ml-1">
-                        Разделы аудита
+                        Ход аудита
                     </h2>
-
-                    {!checklists || checklists.length === 0 ? (
-                        <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-white/10">
-                            <p className="text-slate-500 mb-2">Нет назначенных разделов</p>
-                            <p className="text-xs text-slate-600">Попросите менеджера добавить чек-листы в проект</p>
-                        </div>
-                    ) : (
-                        <div className="grid gap-3">
-                            {checklists.map((checklist: any) => (
-                                <Link
-                                    key={checklist.id}
-                                    href={`/field/checklist/${checklist.id}`}
-                                    className="bg-slate-900 border border-white/5 rounded-2xl p-4 active:scale-[0.98] active:bg-slate-800 transition-all group"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        {/* Status Icon */}
-                                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 border ${checklist.status === 'COMPLETED'
-                                            ? 'bg-green-500/10 border-green-500/20 text-green-500'
-                                            : checklist.status === 'IN_PROGRESS'
-                                                ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                                : 'bg-slate-800 border-white/5 text-slate-500'
-                                            }`}>
-                                            {checklist.status === 'COMPLETED' ? (
-                                                <CheckSquare className="h-6 w-6" />
-                                            ) : checklist.status === 'IN_PROGRESS' ? (
-                                                <Clock className="h-6 w-6" />
-                                            ) : (
-                                                <div className="text-lg font-bold">
-                                                    {(checklist.requirementSet?.name || checklist.requirementSet?.system?.name)?.[0] || 'N'}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between">
-                                                <h3 className="font-bold text-slate-200 text-base truncate pr-2">
-                                                    {checklist.requirementSet?.name || checklist.requirementSet?.system?.name || 'Без названия'}
-                                                </h3>
-                                                <ChevronRight className="h-5 w-5 text-slate-600" />
-                                            </div>
-                                            <p className="text-xs text-slate-500 truncate mt-0.5">
-                                                {checklist.requirementSet?.notes || 'Версия ' + (checklist.requirementSet?.version || '1.0')}
-                                            </p>
-
-                                            {/* Mini Progress Bar if needed, or status text */}
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${checklist.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' :
-                                                    checklist.status === 'IN_PROGRESS' ? 'bg-blue-500/10 text-blue-400' :
-                                                        'bg-slate-800 text-slate-500'
-                                                    }`}>
-                                                    {checklist.status === 'PENDING' ? 'Не начато' :
-                                                        checklist.status === 'IN_PROGRESS' ? 'В процессе' :
-                                                            checklist.status === 'COMPLETED' ? 'Готово' : checklist.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
+                    <UnifiedAuditView results={results || []} projectId={project.id} />
                 </div>
 
             </main>

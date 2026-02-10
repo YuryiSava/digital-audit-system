@@ -136,11 +136,13 @@ export async function saveAuditResult(
     status: string,
     comment?: string,
     photos?: string[],
+    videoLink?: string,
     quantitativeData?: {
         isMultiple?: boolean;
         totalCount?: number;
         failCount?: number;
         inspectionMethod?: string;
+        defect_items?: any[];
     }
 ) {
     const supabase = createClient();
@@ -152,12 +154,14 @@ export async function saveAuditResult(
     };
     if (comment !== undefined) updateData.comment = comment;
     if (photos !== undefined) updateData.photos = photos;
+    if (videoLink !== undefined) updateData.video_link = videoLink;
 
     if (quantitativeData) {
         if (quantitativeData.isMultiple !== undefined) updateData.isMultiple = quantitativeData.isMultiple;
         if (quantitativeData.totalCount !== undefined) updateData.totalCount = quantitativeData.totalCount;
         if (quantitativeData.failCount !== undefined) updateData.failCount = quantitativeData.failCount;
         if (quantitativeData.inspectionMethod !== undefined) updateData.inspectionMethod = quantitativeData.inspectionMethod;
+        if (quantitativeData.defect_items !== undefined) updateData.defect_items = quantitativeData.defect_items;
     }
 
     const { error } = await supabase
@@ -252,4 +256,60 @@ export async function getProjectFullAuditData(projectId: string) {
     if (cError) return { success: false, error: cError.message };
 
     return { success: true, project, checklists };
+}
+
+export async function getProjectFullExecutionData(projectId: string) {
+    const supabase = createClient();
+
+    // 1. Get Project
+    const { data: project, error: pError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+    if (pError) return { success: false, error: pError.message };
+
+    // 2. Get ALL audit results for this project via checklists
+    // We join checklists -> results -> requirements -> normSource
+    const { data: checklists, error: cError } = await supabase
+        .from('audit_checklists')
+        .select(`
+            id,
+            requirementSet:requirement_sets (
+                id, name, systemId,
+                system:systems(name)
+            ),
+            results:audit_results (
+                *,
+                requirement:requirements (
+                    *,
+                    normSource:norm_sources (code, title)
+                )
+            )
+        `)
+        .eq('projectId', projectId);
+
+    if (cError) return { success: false, error: cError.message };
+
+    // Flatten results into a single array
+    let allResults: any[] = [];
+    checklists?.forEach((checklist: any) => {
+        if (checklist.results) {
+            checklist.results.forEach((result: any) => {
+                // Enrich result with checklist/system context if needed
+                result.systemId = checklist.requirementSet?.systemId;
+                result.systemName = checklist.requirementSet?.system?.name;
+                result.checklistId = checklist.id;
+                allResults.push(result);
+            });
+        }
+    });
+
+    // Sort by clause
+    allResults.sort((a, b) =>
+        a.requirement.clause.localeCompare(b.requirement.clause, undefined, { numeric: true })
+    );
+
+    return { success: true, project, results: allResults };
 }
