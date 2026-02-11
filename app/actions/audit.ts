@@ -72,6 +72,45 @@ export async function createAuditChecklist(projectId: string, requirementSetId: 
     return { success: true, data: checklist };
 }
 
+/**
+ * NEW: Create Checklist by System ID (Phase 8 System-Centric)
+ * automatically finds the relevant Requirement Set for the system
+ */
+export async function createSystemChecklist(projectId: string, systemId: string) {
+    const supabase = createClient();
+
+    // 1. Find the best matching Requirement Set for this System
+    // Logic: Latest PUBLISHED set for this system
+    const { data: reqSet, error: rsError } = await supabase
+        .from('requirement_sets')
+        .select('id, name')
+        .eq('systemId', systemId)
+        .eq('status', 'PUBLISHED')
+        .order('createdAt', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (rsError) return { success: false, error: rsError.message };
+
+    if (!reqSet) {
+        // Fallback: finding ANY set for this system (maybe DRAFT allowed for testing?)
+        const { data: draftSet } = await supabase
+            .from('requirement_sets')
+            .select('id, name')
+            .eq('systemId', systemId)
+            .order('createdAt', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (!draftSet) {
+            return { success: false, error: `Для системы ${systemId} не найдено каталогов требований.` };
+        }
+        return createAuditChecklist(projectId, draftSet.id);
+    }
+
+    return createAuditChecklist(projectId, reqSet.id);
+}
+
 export async function getProjectChecklists(projectId: string) {
     const supabase = createClient();
     const { data, error } = await supabase

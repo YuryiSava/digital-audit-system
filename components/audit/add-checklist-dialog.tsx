@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, CheckSquare } from 'lucide-react';
 import { Button, Label } from '@/components/ui/simple-ui';
-import { getRequirementSets } from '@/app/actions/requirements';
-import { createAuditChecklist } from '@/app/actions/audit';
+import { getAvailableSystems } from '@/app/actions/pre-audit';
+import { createSystemChecklist } from '@/app/actions/audit';
 
 interface AddChecklistDialogProps {
     projectId: string;
@@ -15,16 +15,16 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const [sets, setSets] = useState<any[]>([]);
-    const [selectedSetId, setSelectedSetId] = useState('');
+    const [systems, setSystems] = useState<any[]>([]);
+    const [selectedSystemId, setSelectedSystemId] = useState('');
 
     useEffect(() => {
-        if (isOpen && sets.length === 0) {
-            getRequirementSets().then(res => {
-                if (res.success && res.data) {
-                    setSets(res.data);
-                    if (res.data.length > 0) {
-                        setSelectedSetId(res.data[0].id);
+        if (isOpen && systems.length === 0) {
+            getAvailableSystems().then(res => {
+                if (res.success && res.systems) {
+                    setSystems(res.systems);
+                    if (res.systems.length > 0) {
+                        setSelectedSystemId(res.systems[0].systemId);
                     }
                 }
             });
@@ -32,12 +32,12 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
     }, [isOpen]);
 
     const handleSubmit = async () => {
-        if (!selectedSetId) return;
+        if (!selectedSystemId) return;
 
         setLoading(true);
         setError(null);
 
-        const res = await createAuditChecklist(projectId, selectedSetId);
+        const res = await createSystemChecklist(projectId, selectedSystemId);
 
         if (res.success) {
             setIsOpen(false);
@@ -70,33 +70,33 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
 
                     <div className="space-y-2">
-                        <Label>Каталог требований</Label>
+                        <Label>Выберите систему</Label>
                         <div className="space-y-2">
-                            {sets.map(set => (
+                            {systems.map(sys => (
                                 <div
-                                    key={set.id}
-                                    onClick={() => setSelectedSetId(set.id)}
-                                    className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedSetId === set.id
+                                    key={sys.id}
+                                    onClick={() => setSelectedSystemId(sys.systemId)}
+                                    className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedSystemId === sys.systemId
                                         ? 'bg-blue-500/20 border-blue-500 text-white'
                                         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                                         }`}
                                 >
-                                    <div className={`h-5 w-5 rounded-full border flex items-center justify-center ${selectedSetId === set.id ? 'border-blue-400 bg-blue-400' : 'border-gray-500'
+                                    <div className={`h-5 w-5 rounded-full border flex items-center justify-center ${selectedSystemId === sys.systemId ? 'border-blue-400 bg-blue-400' : 'border-gray-500'
                                         }`}>
-                                        {selectedSetId === set.id && <CheckSquare className="h-3 w-3 text-white" />}
+                                        {selectedSystemId === sys.systemId && <CheckSquare className="h-3 w-3 text-white" />}
                                     </div>
                                     <div>
                                         <div className="font-medium text-sm">
-                                            {set.name || `${set.system?.name || 'Система'} v${set.version}`}
+                                            {sys.name} ({sys.systemId})
                                         </div>
-                                        <div className="text-xs opacity-70">{set.notes || 'Без описания'}</div>
+                                        <div className="text-xs opacity-70">{sys.nameRu || 'Без названия'}</div>
                                     </div>
                                 </div>
                             ))}
 
-                            {sets.length === 0 && (
+                            {systems.length === 0 && (
                                 <div className="text-gray-500 text-sm text-center py-4">
-                                    Нет доступных каталогов. Создайте их в разделе "Каталоги требований".
+                                    Нет доступных систем.
                                 </div>
                             )}
                         </div>
@@ -112,7 +112,7 @@ export function AddChecklistDialog({ projectId }: AddChecklistDialogProps) {
                         <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
                             Отмена
                         </Button>
-                        <Button onClick={handleSubmit} disabled={loading || sets.length === 0}>
+                        <Button onClick={handleSubmit} disabled={loading || systems.length === 0}>
                             {loading ? 'Создание...' : 'Добавить'}
                         </Button>
                     </div>

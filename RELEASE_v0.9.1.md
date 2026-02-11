@@ -18,9 +18,13 @@
 - **New Library**: `lib/system-tags.ts` - Maps System IDs (APS, SOUE) to generic Requirement Tags (FIRE_SAFETY, POWER, etc.).
 - **Backend**: Updated `freezeProjectBaseline` to use `normIds` and filter by tags.
 - **Frontend**: Updated `ProjectPreAuditWizard` to support Norm selection.
+- **Fixes**:
+  - **Add Audit Section**: Now supports selecting Systems directly (auto-matches Norms).
+  - **Norm Edit**: Added "Section/Category" field support.
+  - **AI Parsing**: Improved language filtering (ignores non-Russian text).
 
 ## 📦 Database Changes
-- None (Logic-only update).
+- **Migration**: Added `category` column to `norm_sources`.
 
 ## 📝 Usage
 1.  Go to **Projects** -> **Create/Select Project**.
