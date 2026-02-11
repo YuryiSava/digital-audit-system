@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
 import {
     updateProjectScope,
     freezeProjectBaseline,
-    getAvailableRequirementSets,
+    getAvailableNorms,
     getProjectPreAuditProgress
 } from '@/app/actions/project-preaudit';
 import { getAvailableSystems } from '@/app/actions/pre-audit';
@@ -21,7 +21,7 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [systems, setSystems] = useState<any[]>([]);
-    const [requirementSets, setRequirementSets] = useState<any[]>([]);
+    const [norms, setNorms] = useState<any[]>([]);
     const [progress, setProgress] = useState<any>({});
 
     // Step 2: Scope
@@ -31,8 +31,8 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
         scopeExclusions: project.scopeExclusions || ''
     });
 
-    // Step 3: Requirement Sets
-    const [selectedRequirementSets, setSelectedRequirementSets] = useState<string[]>([]);
+    // Step 3: Norms
+    const [selectedNorms, setSelectedNorms] = useState<string[]>([]);
 
     useEffect(() => {
         loadSystems();
@@ -41,7 +41,7 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
 
     useEffect(() => {
         if (currentStep === 3 && scope.systemsInScope.length > 0) {
-            loadRequirementSets();
+            loadNorms();
         }
     }, [currentStep, scope.systemsInScope]);
 
@@ -52,10 +52,11 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
         }
     };
 
-    const loadRequirementSets = async () => {
-        const result = await getAvailableRequirementSets(project.id);
-        if (result.success && result.requirementSets) {
-            setRequirementSets(result.requirementSets);
+    const loadNorms = async () => {
+        // No longer dependent on project.id for filtering (we fetch all active norms)
+        const result = await getAvailableNorms();
+        if (result.success && result.norms) {
+            setNorms(result.norms);
         }
     };
 
@@ -85,8 +86,8 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
     };
 
     const handleFreezeBaseline = async () => {
-        if (selectedRequirementSets.length === 0) {
-            alert('Выберите хотя бы один набор требований');
+        if (selectedNorms.length === 0) {
+            alert('Выберите хотя бы один нормативный документ');
             return;
         }
 
@@ -95,7 +96,7 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
         }
 
         setLoading(true);
-        const result = await freezeProjectBaseline(project.id, selectedRequirementSets);
+        const result = await freezeProjectBaseline(project.id, selectedNorms);
         setLoading(false);
 
         if (result.success) {
@@ -110,7 +111,7 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
     const steps = [
         { number: 1, title: 'Информация о проекте', completed: progress.step1_basicInfo },
         { number: 2, title: 'Scope систем', completed: progress.step2_scope },
-        { number: 3, title: 'Наборы требований', completed: progress.step3_requirementSets }
+        { number: 3, title: 'Нормативные документы', completed: progress.step3_requirementSets }
     ];
 
     return (
@@ -322,60 +323,76 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
                         </div>
                     )}
 
-                    {/* Step 3: Requirement Sets */}
+                    {/* Step 3: Norms */}
                     {currentStep === 3 && (
                         <div className="space-y-6">
-                            <h2 className="text-2xl font-bold text-white mb-6">📚 Наборы требований</h2>
+                            <h2 className="text-2xl font-bold text-white mb-6">📚 Нормативные документы</h2>
 
-                            {requirementSets.length === 0 ? (
+                            <p className="text-blue-200 mb-4 bg-blue-900/40 p-3 rounded-lg border border-blue-500/30">
+                                Выберите нормативы, которые будут использоваться в аудите.
+                                Система автоматически отфильтрует требования из выбранных документов,
+                                оставив только те, что относятся к системам в Scope ({scope.systemsInScope.join(', ')}).
+                            </p>
+
+                            {norms.length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="text-6xl mb-4">📭</div>
                                     <h3 className="text-xl font-bold text-white mb-2">
-                                        Нет доступных наборов требований
+                                        Нет доступных нормативов
                                     </h3>
                                     <p className="text-blue-200 mb-6">
-                                        Для выбранных систем ({scope.systemsInScope.join(', ')}) нет опубликованных наборов требований.
+                                        В библиотеке нет активных нормативных документов.
                                     </p>
                                     <p className="text-sm text-blue-300">
-                                        Сначала загрузите и распарсите нормативные документы в разделе Norm Library.
+                                        Загрузите их в разделе Norm Library.
                                     </p>
                                 </div>
                             ) : (
                                 <>
                                     <div className="space-y-4">
-                                        {requirementSets.map((reqSet) => (
+                                        {norms.map((norm) => (
                                             <label
-                                                key={reqSet.id}
+                                                key={norm.id}
                                                 className={`flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
-                                                    ${selectedRequirementSets.includes(reqSet.id)
+                                                    ${selectedNorms.includes(norm.id)
                                                         ? 'bg-blue-500/20 border-blue-500'
                                                         : 'bg-white/5 border-white/20 hover:border-white/40'
                                                     }`}
                                             >
                                                 <input
                                                     type="checkbox"
-                                                    checked={selectedRequirementSets.includes(reqSet.id)}
+                                                    checked={selectedNorms.includes(norm.id)}
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
-                                                            setSelectedRequirementSets([...selectedRequirementSets, reqSet.id]);
+                                                            setSelectedNorms([...selectedNorms, norm.id]);
                                                         } else {
-                                                            setSelectedRequirementSets(selectedRequirementSets.filter(id => id !== reqSet.id));
+                                                            setSelectedNorms(selectedNorms.filter(id => id !== norm.id));
                                                         }
                                                     }}
                                                     className="w-5 h-5 mt-1"
                                                 />
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-3 mb-2">
-                                                        <span className="font-bold text-white text-lg">{reqSet.requirementSetId}</span>
+                                                        <span className="font-bold text-white text-lg">{norm.code}</span>
                                                         <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded">
-                                                            {reqSet.system?.systemId || reqSet.systemId}
+                                                            {norm.docType}
                                                         </span>
-                                                        <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded">
-                                                            v{reqSet.version}
-                                                        </span>
+                                                        {norm.jurisdiction && (
+                                                            <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded">
+                                                                {norm.jurisdiction}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    {reqSet.notes && (
-                                                        <p className="text-sm text-blue-200">{reqSet.notes}</p>
+                                                    <p className="text-white mb-1 font-medium">{norm.title}</p>
+
+                                                    {norm.tags && norm.tags.length > 0 && (
+                                                        <div className="flex gap-2 flex-wrap mt-2">
+                                                            {norm.tags.map((tag: string) => (
+                                                                <span key={tag} className="text-xs text-white/50 bg-white/10 px-1.5 py-0.5 rounded">
+                                                                    {tag}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </label>
@@ -391,7 +408,7 @@ export default function ProjectPreAuditWizard({ project }: ProjectPreAuditWizard
                                         </button>
                                         <button
                                             onClick={handleFreezeBaseline}
-                                            disabled={loading || selectedRequirementSets.length === 0 || project.baselineFrozen}
+                                            disabled={loading || selectedNorms.length === 0 || project.baselineFrozen}
                                             className="px-8 py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-green-500/50 text-lg"
                                         >
                                             {loading ? '⏳ Заморозка...' : project.baselineFrozen ? '🔒 Уже заморожен' : '🔒 Freeze Baseline'}

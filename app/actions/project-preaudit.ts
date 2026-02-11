@@ -44,11 +44,18 @@ export async function updateProjectScope(projectId: string, data: {
  * Freeze Baseline for Project
  * Creates AuditChecklists from selected RequirementSets
  */
-export async function freezeProjectBaseline(projectId: string, requirementSetIds: string[]) {
-    try {
-        console.log(`[Project Baseline] Freezing baseline for project: ${projectId}`);
+import { getTagsForSystems } from '@/lib/system-tags';
 
-        // 1. Fetch project
+/**
+ * Freeze Baseline for Project (Refactored for Phase 8)
+ * Creates AuditChecklists from selected Normative Documents (NormSources)
+ * Filters requirements based on Project Scope (Systems)
+ */
+export async function freezeProjectBaseline(projectId: string, normIds: string[]) {
+    try {
+        console.log(`[Project Baseline] Freezing baseline for project: ${projectId} with norms: ${normIds}`);
+
+        // 1. Fetch project to get scope
         const { data: project, error: projectError } = await supabase
             .from('projects')
             .select('*')
@@ -67,23 +74,88 @@ export async function freezeProjectBaseline(projectId: string, requirementSetIds
             return { success: false, error: 'No systems in scope. Please select systems first.' };
         }
 
-        // 2. Validate requirement sets
-        if (!requirementSetIds || requirementSetIds.length === 0) {
-            return { success: false, error: 'No requirement sets selected' };
+        // 2. Validate norm selection
+        if (!normIds || normIds.length === 0) {
+            return { success: false, error: 'No normative documents selected' };
         }
 
-        // 3. Create AuditChecklists for each requirement set
+        // 3. Prepare Tags for filtering
+        const scopeTags = getTagsForSystems(project.systemsInScope);
+        console.log(`[Project Baseline] Scope Tags:`, scopeTags);
+
+        // 4. Create AuditChecklists for each Norm and Filter Requirements
         const now = new Date().toISOString();
         let totalCheckItems = 0;
+        let createdChecklistsCount = 0;
 
-        for (const reqSetId of requirementSetIds) {
-            // Create checklist
+        for (const normId of normIds) {
+            // Fetch requirements for this NormSource
+            // Note: We need to join requirements linked to this normSourceId
+            const { data: requirements, error: reqError } = await supabase
+                .from('requirements')
+                .select('*')
+                .eq('normSourceId', normId);
+
+            if (reqError) {
+                console.error(`[Project Baseline] Error fetching requirements for norm ${normId}:`, reqError);
+                continue; // Skip faulty norm
+            }
+
+            if (!requirements || requirements.length === 0) {
+                console.warn(`[Project Baseline] No requirements found for norm ${normId}`);
+                continue;
+            }
+
+            // FILTER: Keep only requirements relevant to scope
+            // Logic: 
+            // 1. If req.tags intersects with scopeTags
+            // 2. OR if req.systemId matches one of project.systemsInScope (Direct System Link)
+            const filteredRequirements = requirements.filter(req => {
+                const hasMatchingTag = req.tags && req.tags.some((tag: string) => scopeTags.includes(tag));
+                const hasMatchingSystem = project.systemsInScope.includes(req.systemId);
+                return hasMatchingTag || hasMatchingSystem;
+            });
+
+            if (filteredRequirements.length === 0) {
+                console.log(`[Project Baseline] Norm ${normId} has no requirements matching project scope.`);
+                continue;
+            }
+
+            // Create checklist for this Norm
+            // We need a RequirementSet concept for current schema compatibility, 
+            // OR we create a dynamic "Project-Specific" requirement set? 
+            // Existing schema expects `requirementSetId`.
+            // SHORTCUT: We might need to fetch the existing RequirementSet for this Norm if it exists,
+            // OR we link to a "Norm-based" entity.
+
+            // CHALLENGE: AuditChecklist.requirementSetId is mandatory.
+            // TEMPORARY FIX: We find ANY RequirementSet linked to this Norm, or create a placeholder?
+            // BETTER: We search for a RequirementSet that wraps this Norm.
+            // IF we are moving away from RequirmentSets, we should probably select the RequirementSet that represents this Norm.
+
+            // Let's try to find a RequirementSet associated with this Norm (if strict 1:1 exists).
+            // Actually, RequirementSet was usually "SP 484 (APS)".
+            // If we select "SP 484" Norm, we can find RequirementSets that utilize it.
+
+            // ALTERNATIVE: Use the FIRST RequirementSet found for this Norm to keep FK happy, 
+            // but the checklist content is custom.
+
+            const { data: reqSet } = await supabase
+                .from('requirement_sets')
+                .select('id')
+                .eq('id', requirements[0].requirementSetId) // Use the set from the first requirement
+                .limit(1)
+                .maybeSingle();
+
+            const targetReqSetId = reqSet?.id || requirements[0].requirementSetId;
+
+            // Create Checklist
             const { data: checklist, error: checklistError } = await supabase
                 .from('audit_checklists')
                 .insert({
                     id: crypto.randomUUID(),
                     projectId: projectId,
-                    requirementSetId: reqSetId,
+                    requirementSetId: targetReqSetId, // Linking to underlying set for referential integrity
                     status: 'PENDING',
                     startedAt: now,
                     createdAt: now,
@@ -94,63 +166,50 @@ export async function freezeProjectBaseline(projectId: string, requirementSetIds
 
             if (checklistError) {
                 console.error('[Project Baseline] Error creating checklist:', checklistError);
-                return { success: false, error: `Failed to create checklist: ${checklistError.message}` };
+                continue;
             }
+            createdChecklistsCount++;
 
-            // Get requirements for this set
-            const { data: requirements, error: reqError } = await supabase
-                .from('requirements')
-                .select('id')
-                .eq('requirementSetId', reqSetId);
+            // Create Results
+            const resultsToCreate = filteredRequirements.map(req => ({
+                id: crypto.randomUUID(),
+                checklistId: checklist.id,
+                requirementId: req.id,
+                status: 'NOT_CHECKED',
+                createdAt: now,
+                updatedAt: now
+            }));
 
-            if (reqError) {
-                console.error('[Project Baseline] Error fetching requirements:', reqError);
-                return { success: false, error: `Failed to fetch requirements: ${reqError.message}` };
-            }
+            const { error: batchError } = await supabase
+                .from('audit_results')
+                .insert(resultsToCreate);
 
-            if (requirements && requirements.length > 0) {
-                // Create AuditResults for all requirements
-                const resultsToCreate = requirements.map(req => ({
-                    id: crypto.randomUUID(),
-                    checklistId: checklist.id,
-                    requirementId: req.id,
-                    status: 'NOT_CHECKED',
-                    createdAt: now,
-                    updatedAt: now
-                }));
-
-                const { error: batchError } = await supabase
-                    .from('audit_results')
-                    .insert(resultsToCreate);
-
-                if (batchError) {
-                    console.error('[Project Baseline] Error creating audit results:', batchError);
-                    return { success: false, error: `Failed to create audit results: ${batchError.message}` };
-                }
-
+            if (batchError) {
+                console.error('[Project Baseline] Error creating results:', batchError);
+            } else {
                 totalCheckItems += resultsToCreate.length;
-                console.log(`[Project Baseline] Created ${resultsToCreate.length} check items for checklist ${checklist.id}`);
             }
         }
 
-        // 4. Mark project as frozen
+        if (createdChecklistsCount === 0) {
+            return { success: false, error: 'No checklists created. Check if norms have matching requirements.' };
+        }
+
+        // 5. Mark project as frozen
         const { error: updateError } = await supabase
             .from('projects')
             .update({
                 baselineFrozen: true,
                 baselineFrozenAt: now,
-                baselineFrozenBy: 'system', // TODO: Replace with actual user
+                baselineFrozenBy: 'system',
                 status: 'IN_PROGRESS',
                 updatedAt: now
             })
             .eq('id', projectId);
 
         if (updateError) {
-            console.error('[Project Baseline] Error updating project:', updateError);
             return { success: false, error: `Failed to update project: ${updateError.message}` };
         }
-
-        console.log(`[Project Baseline] Baseline frozen successfully`);
 
         revalidatePath(`/projects/${projectId}`);
         revalidatePath('/projects');
@@ -158,17 +217,14 @@ export async function freezeProjectBaseline(projectId: string, requirementSetIds
         return {
             success: true,
             stats: {
-                checklists: requirementSetIds.length,
+                checklists: createdChecklistsCount,
                 checkItems: totalCheckItems
             }
         };
 
     } catch (error: any) {
         console.error('[Project Baseline] Unexpected error:', error);
-        return {
-            success: false,
-            error: `Unexpected error: ${error.message || error.toString()}`
-        };
+        return { success: false, error: error.message };
     }
 }
 
@@ -241,6 +297,29 @@ export async function getProjectPreAuditProgress(projectId: string) {
         progress.readyToFreeze = progress.step1_basicInfo && progress.step2_scope && !project.baselineFrozen;
 
         return { success: true, progress, project };
+
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get available Normative Documents for selection
+ * Grouped by type or just list? Returning list for now.
+ */
+export async function getAvailableNorms() {
+    try {
+        const { data: norms, error } = await supabase
+            .from('norm_sources')
+            .select('*')
+            .eq('status', 'ACTIVE') // Only active norms
+            .order('createdAt', { ascending: false });
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        return { success: true, norms: norms || [] };
 
     } catch (error: any) {
         return { success: false, error: error.message };

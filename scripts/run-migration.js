@@ -20,13 +20,24 @@ const client = new Client({
 
 async function runMigration() {
     try {
+        const migrationFile = process.argv[2];
+        if (!migrationFile) {
+            console.error('Usage: node scripts/run-migration.js <filename.sql>');
+            process.exit(1);
+        }
+
         await client.connect();
 
         // Read the SQL file relative to this script
-        const migrationPath = path.join(__dirname, '../migrations/add-typical-faults.sql');
+        const migrationPath = path.join(__dirname, '../migrations', migrationFile);
+        if (!fs.existsSync(migrationPath)) {
+            console.error(`Error: File ${migrationFile} not found in migrations folder.`);
+            process.exit(1);
+        }
+
         const sql = fs.readFileSync(migrationPath, 'utf8');
 
-        console.log('Running migration: add-typical-faults.sql...');
+        console.log(`Running migration: ${migrationFile}...`);
 
         // Execute SQL
         await client.query(sql);
