@@ -45,9 +45,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                                 href={`/field/projects/${params.id}`}
                                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium shadow-lg shadow-indigo-500/20"
                             >
-                                <span>📱</span>
-                                <span className="hidden sm:inline">Smart View</span>
-                                <span className="sm:hidden">Field</span>
+                                <span className="hidden sm:inline">📱 Smart View</span>
+                                <span className="sm:hidden">Field Mode</span>
                             </Link>
 
                             {!project.baselineFrozen ? (
