@@ -43,7 +43,7 @@ function runTests() {
         // 2. Filter Logic (Copy from freezeProjectBaseline)
         const filtered = mockRequirements.filter(req => {
             const hasMatchingTag = req.tags && req.tags.some(tag => scopeTags.includes(tag));
-            const hasMatchingSystem = test.scope.includes(req.systemId);
+            const hasMatchingSystem = req.systemId ? test.scope.includes(req.systemId) : false;
             return hasMatchingTag || hasMatchingSystem;
         });
 
