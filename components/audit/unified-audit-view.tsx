@@ -97,10 +97,11 @@ export function UnifiedAuditView({ results: initialResults, projectId }: Unified
     return (
         <div className="space-y-6">
             {/* System Tabs */}
-            <div className="flex overflow-x-auto pb-2 gap-2 scrollbar-hide">
+            {/* System Tabs - Mobile Optimized */}
+            <div className="flex overflow-x-auto pb-4 gap-2 scrollbar-hide w-full touch-pan-x snap-x">
                 <button
                     onClick={() => setActiveTab('ALL')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === 'ALL'
+                    className={`flex-none snap-start flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === 'ALL'
                         ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
                         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                         }`}
@@ -116,7 +117,7 @@ export function UnifiedAuditView({ results: initialResults, projectId }: Unified
                     <button
                         key={sys.id}
                         onClick={() => setActiveTab(sys.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === sys.id
+                        className={`flex-none snap-start flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === sys.id
                             ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
                             : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                             }`}
@@ -131,7 +132,7 @@ export function UnifiedAuditView({ results: initialResults, projectId }: Unified
                 {systemBuckets['OTHER'].length > 0 && (
                     <button
                         onClick={() => setActiveTab('OTHER')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === 'OTHER'
+                        className={`flex-none snap-start flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all border ${activeTab === 'OTHER'
                             ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
                             : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                             }`}

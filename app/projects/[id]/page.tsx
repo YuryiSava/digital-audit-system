@@ -40,23 +40,32 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                         </div>
 
                         <div className="flex items-center gap-3">
+                            <Link
+                                href={`/field/projects/${params.id}`}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium shadow-lg shadow-indigo-500/20"
+                            >
+                                <span>📱</span>
+                                <span className="hidden sm:inline">Smart View</span>
+                                <span className="sm:hidden">Field</span>
+                            </Link>
+
                             {!project.baselineFrozen ? (
                                 <Link
                                     href={`/projects/${params.id}/pre-audit`}
                                     className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
                                 >
                                     <span>🎯</span>
-                                    <span>Pre-Audit Setup</span>
+                                    <span className="hidden sm:inline">Pre-Audit</span>
                                 </Link>
                             ) : (
                                 <div className="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/50 text-green-300 rounded-lg font-medium">
                                     <span>🔒</span>
-                                    <span>Baseline Frozen</span>
+                                    <span>Frozen</span>
                                 </div>
                             )}
                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${project.status === 'COMPLETED' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
                                 }`}>
-                                {project.status === 'PLANNING' ? 'Планирование' : project.status}
+                                {project.status === 'PLANNING' ? 'Plan' : project.status}
                             </span>
                             <ExecutiveSummaryDialog
                                 projectId={params.id}
