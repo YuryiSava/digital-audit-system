@@ -24,7 +24,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gray-900 to-slate-900" data-deploy-check="2026-02-12-11-13">
+            {/* DEPLOY_CHECK: 2026-02-12 11:13 UTC+5 */}
             {/* Header */}
             <header className="border-b border-white/10 bg-black/20 backdrop-blur-sm sticky top-0 z-10">
                 <div className="container mx-auto px-6 py-4">
